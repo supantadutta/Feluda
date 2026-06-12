@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment / secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.local
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Local data stores (vector store, sqlite, audit logs)
+data/
+*.sqlite
+*.sqlite3
+*.db
+logs/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Vite / PWA
+dev-dist/

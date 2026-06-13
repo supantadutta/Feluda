@@ -15,6 +15,8 @@ export interface Config {
   defaultModel: string;
   /** Web search key (Layer IV). When absent, offline fixtures are used. */
   searchApiKey?: string;
+  /** Path to the local vector store (Layer V). */
+  vectorStorePath: string;
 }
 
 export function loadConfig(): Config {
@@ -25,5 +27,6 @@ export function loadConfig(): Config {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
     defaultModel: process.env.FELUDA_DEFAULT_MODEL ?? 'claude-opus-4-8',
     searchApiKey: process.env.WEB_SEARCH_API_KEY || undefined,
+    vectorStorePath: process.env.VECTOR_STORE_PATH ?? './data/vector-store/store.json',
   };
 }

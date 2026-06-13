@@ -5,12 +5,13 @@ import {
   InvestigationCore,
   Council,
   Evidence,
+  Memory,
   Ethics,
   type Verdict,
 } from '@feluda/core';
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 2;
+const PHASE = 3;
 
 interface InvestigateBody {
   question?: unknown;
@@ -42,8 +43,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     model: config.defaultModel,
   });
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
+  const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
   const audit = new Ethics.FileAuditLog();
-  const orchestrator = InvestigationCore.createOrchestrator({ gateway, evidence, audit });
+  const orchestrator = InvestigationCore.createOrchestrator({ gateway, evidence, memory, audit });
 
   app.get('/health', async () => ({
     status: 'ok',
@@ -72,6 +74,24 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     });
 
     return verdict;
+  });
+
+  // Knowledge Vault (Layer V): add a free-text note that future investigations
+  // can recall. Returns the stored item.
+  app.post<{ Body: { text?: unknown; caseId?: unknown } }>('/api/notes', async (req, reply) => {
+    const { text, caseId } = req.body ?? {};
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "text" string is required.' });
+    }
+    const item = await memory.addNote(text.trim(), typeof caseId === 'string' ? caseId : undefined);
+    return { item };
+  });
+
+  // Recall what memory holds for a query (notes + prior cases).
+  app.get<{ Querystring: { q?: string } }>('/api/memory/recall', async (req, reply) => {
+    const q = req.query.q;
+    if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
+    return { items: await memory.recall(q, 5) };
   });
 
   // Doc & Data Ingest (Layer IV stretch): parse a user document into evidence

@@ -11,6 +11,7 @@
 import type { Citation, Evidence, Query, Verdict } from '../types.js';
 import type { ModelGateway } from '../layer3-council/index.js';
 import type { EvidencePort, GatheredEvidence } from '../layer4-evidence/index.js';
+import type { MemoryPort, MemoryItem } from '../layer5-memory/index.js';
 import type { EthicsGate, AuditLog, GateDecision } from '../layer7-ethics/index.js';
 import { auditEntry } from '../layer7-ethics/audit.js';
 import { ArrayReasoningTracer } from './tracer.js';
@@ -26,6 +27,8 @@ export interface OrchestratorDeps {
   audit: AuditLog;
   /** Optional Evidence layer (IV). When absent, the loop reasons unaided. */
   evidence?: EvidencePort;
+  /** Optional Memory layer (V). When present, prior notes/cases are recalled. */
+  memory?: MemoryPort;
 }
 
 export class DeductionOrchestrator implements Orchestrator {
@@ -55,6 +58,16 @@ export class DeductionOrchestrator implements Orchestrator {
       return this.refusal(query, inbound, tracer);
     }
 
+    // ── Recall prior notes & cases (Layer V, when wired) ──
+    let recalled: MemoryItem[] = [];
+    if (this.deps.memory) {
+      recalled = await this.deps.memory.recall(query.text, 4);
+      if (recalled.length > 0) {
+        tracer.record('gather', `Recalled ${recalled.length} relevant item(s) from memory.`);
+      }
+    }
+    const memoryContext = recalled.map((m) => m.text);
+
     // ── Gather evidence (Layer IV, when wired) ──
     let gathered: GatheredEvidence | undefined;
     if (this.deps.evidence) {
@@ -75,7 +88,7 @@ export class DeductionOrchestrator implements Orchestrator {
     const evidence: Evidence[] = gathered?.evidence ?? [];
 
     // ── Hypothesise → weigh ──
-    const hypotheses = await this.hypotheses.generate(query, evidence);
+    const hypotheses = await this.hypotheses.generate(query, evidence, memoryContext);
     tracer.record(
       'hypothesize',
       `Formed ${hypotheses.length} competing hypotheses.`,
@@ -91,7 +104,7 @@ export class DeductionOrchestrator implements Orchestrator {
     );
 
     // ── Synthesise the verdict ──
-    const synth = await this.synthesizer.synthesize(query, weighed, evidence);
+    const synth = await this.synthesizer.synthesize(query, weighed, evidence, memoryContext);
     for (const step of synth.reasoning) tracer.record('weigh', step);
 
     const confidence = this.calibrator.calibrate(weighed, evidence, {
@@ -121,7 +134,7 @@ export class DeductionOrchestrator implements Orchestrator {
       }),
     );
 
-    return {
+    const verdict: Verdict = {
       queryId: query.id,
       answer: synth.answer,
       trace: tracer.trace(),
@@ -130,6 +143,13 @@ export class DeductionOrchestrator implements Orchestrator {
       hypotheses: weighed,
       evidence: evidence.length > 0 ? evidence : undefined,
     };
+
+    // ── Write the finished case back to Memory (Layer V) ──
+    if (this.deps.memory?.rememberCase) {
+      await this.deps.memory.rememberCase(query, verdict);
+    }
+
+    return verdict;
   }
 
   /** Build a transparent refusal verdict carrying the lawful alternative. */

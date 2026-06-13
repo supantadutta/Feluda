@@ -24,6 +24,7 @@ export class LlmSynthesizer {
     query: Query,
     hypotheses: Hypothesis[],
     evidence: Evidence[] = [],
+    memory: string[] = [],
   ): Promise<SynthesisResult> {
     const hypoSummary = hypotheses.map((h) => ({ statement: h.statement, belief: h.belief }));
     const evidenceBlock =
@@ -32,10 +33,13 @@ export class LlmSynthesizer {
             .map((e, i) => `[${i + 1}] ${e.claim} — ${e.citation.source}`)
             .join('\n')}`
         : 'No external sources are available; rely on general knowledge and say so.';
+    const memoryBlock =
+      memory.length > 0 ? `Prior context from memory (use if relevant):\n${memory.join('\n---\n')}` : '';
     const prompt = [
       'TASK=SYNTHESIS',
       'Give your reasoned verdict. Ground claims in the evidence below where possible.',
       'Never fabricate citations or URLs. Be calibrated — if uncertain, say so and lower confidence.',
+      memoryBlock,
       evidenceBlock,
       `Question: "${query.text}"`,
       `Hypotheses: ${JSON.stringify(hypoSummary)}`,

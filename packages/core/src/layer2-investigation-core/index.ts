@@ -20,6 +20,7 @@ import type {
 } from '../types.js';
 import type { ModelGateway } from '../layer3-council/index.js';
 import type { EvidencePort } from '../layer4-evidence/index.js';
+import type { MemoryPort } from '../layer5-memory/index.js';
 import type { EthicsGate, AuditLog } from '../layer7-ethics/index.js';
 import { createModelGateway } from '../layer3-council/index.js';
 import { createEthicsGate, InMemoryAuditLog } from '../layer7-ethics/index.js';
@@ -65,6 +66,8 @@ export interface CreateOrchestratorConfig {
   audit?: AuditLog;
   /** Evidence layer (IV). Pass to enable the "gather evidence" step. */
   evidence?: EvidencePort;
+  /** Memory layer (V). Pass to recall prior notes/cases and persist new ones. */
+  memory?: MemoryPort;
 }
 
 /**
@@ -78,5 +81,6 @@ export function createOrchestrator(config: CreateOrchestratorConfig = {}): Orche
     ethics: config.ethics ?? createEthicsGate(),
     audit: config.audit ?? new InMemoryAuditLog(),
     evidence: config.evidence,
+    memory: config.memory,
   });
 }

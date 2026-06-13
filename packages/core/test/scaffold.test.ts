@@ -36,8 +36,10 @@ describe('core scaffold', () => {
   });
 
   it('not-yet-built layers still throw NotImplementedError', () => {
-    // Layer V (Memory) lands in Phase 3.
-    const memory = Memory.createMemoryPort();
-    expect(() => memory.recall('x', 3)).toThrow(NotImplementedError);
+    // Layer VI (Action) lands in Phase 5.
+    const action = Action.createActionPort();
+    expect(() =>
+      action.perform({ kind: 'report.export', consequential: false, payload: {} }),
+    ).toThrow(NotImplementedError);
   });
 });

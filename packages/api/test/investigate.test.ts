@@ -15,6 +15,7 @@ describe('POST /api/investigate', () => {
       apiPort: 0,
       webOrigin: 'http://localhost:5173',
       defaultModel: 'claude-opus-4-8',
+      vectorStorePath: '',
     });
   });
 

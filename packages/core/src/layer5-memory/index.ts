@@ -10,7 +10,9 @@
  * Phase: Knowledge Vault + Case Memory in Phase 3; adaptive learning in Phase 6.
  */
 import type { Verdict } from '../types.js';
-import { notImplemented } from '../util/not-implemented.js';
+import { LocalEmbedder, type Embedder } from './embedder.js';
+import { InMemoryVectorStore, FileVectorStore } from './vector-store.js';
+import { KnowledgeVault } from './knowledge-vault.js';
 
 /** A retrievable memory item (note, prior finding, case summary). */
 export interface MemoryItem {
@@ -30,14 +32,28 @@ export interface VectorStore {
 export interface MemoryPort {
   recall(text: string, k: number): Promise<MemoryItem[]>;
   remember(items: MemoryItem[]): Promise<void>;
+  /** Summarise a finished investigation into Case Memory for later recall. */
+  rememberCase?(query: { id: string; text: string; caseId?: string }, verdict: Verdict): Promise<void>;
   /** Self-Review hook: revisit a past verdict when new evidence arrives. */
   reviewOnNewEvidence?(verdict: Verdict): Promise<void>;
 }
 
-/** Phase 0 placeholder — backed by a local vector store in Phase 3. */
-export function createMemoryPort(): MemoryPort {
-  return {
-    recall: () => notImplemented('Layer V MemoryPort.recall'),
-    remember: () => notImplemented('Layer V MemoryPort.remember'),
-  };
+export { LocalEmbedder, cosine, type Embedder } from './embedder.js';
+export { InMemoryVectorStore, FileVectorStore } from './vector-store.js';
+export { KnowledgeVault } from './knowledge-vault.js';
+
+export interface MemoryConfig {
+  /** File path to persist the vector store. When absent, memory is in-process. */
+  storePath?: string;
+  /** Swap the embedder (defaults to the offline LocalEmbedder). */
+  embedder?: Embedder;
+}
+
+/** Build the default MemoryPort — a Knowledge Vault over a local vector store. */
+export function createMemoryPort(config: MemoryConfig = {}): KnowledgeVault {
+  const embedder = config.embedder ?? new LocalEmbedder();
+  const store = config.storePath
+    ? new FileVectorStore(embedder, config.storePath)
+    : new InMemoryVectorStore(embedder);
+  return new KnowledgeVault(store);
 }

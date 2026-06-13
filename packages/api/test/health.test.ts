@@ -12,6 +12,7 @@ describe('api /health', () => {
       apiPort: 0,
       webOrigin: 'http://localhost:5173',
       defaultModel: 'claude-opus-4-8',
+      vectorStorePath: '',
     });
   });
 
@@ -25,7 +26,7 @@ describe('api /health', () => {
     expect(res.json()).toMatchObject({
       status: 'ok',
       service: 'feluda-api',
-      phase: 2,
+      phase: 3,
       modelMode: 'offline-stub',
       evidenceMode: 'offline-fixture',
     });

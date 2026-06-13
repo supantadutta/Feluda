@@ -20,7 +20,7 @@ import type {
 } from '../types.js';
 import type { ModelGateway, Council } from '../layer3-council/index.js';
 import type { EvidencePort } from '../layer4-evidence/index.js';
-import type { MemoryPort } from '../layer5-memory/index.js';
+import type { MemoryPort, FeedbackStore, PatternLibrary, SelfReview } from '../layer5-memory/index.js';
 import type { EthicsGate, AuditLog } from '../layer7-ethics/index.js';
 import { createModelGateway } from '../layer3-council/index.js';
 import { createEthicsGate, InMemoryAuditLog } from '../layer7-ethics/index.js';
@@ -70,6 +70,10 @@ export interface CreateOrchestratorConfig {
   memory?: MemoryPort;
   /** Multi-AI Council (III). Pass to cross-examine synthesis across a panel. */
   council?: Council;
+  /** Adaptive learning (V): feedback store, pattern library, self-review. */
+  feedback?: FeedbackStore;
+  patterns?: PatternLibrary;
+  selfReview?: SelfReview;
 }
 
 /**
@@ -85,5 +89,8 @@ export function createOrchestrator(config: CreateOrchestratorConfig = {}): Orche
     evidence: config.evidence,
     memory: config.memory,
     council: config.council,
+    feedback: config.feedback,
+    patterns: config.patterns,
+    selfReview: config.selfReview,
   });
 }

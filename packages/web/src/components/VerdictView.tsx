@@ -29,6 +29,17 @@ export function VerdictView({ verdict }: { verdict: Verdict }): JSX.Element {
         <ConfidenceBadge confidence={verdict.confidence} />
       </div>
 
+      {verdict.reviewFlags && verdict.reviewFlags.length > 0 && (
+        <div className="rounded border border-amber-700/60 bg-amber-950/30 p-2 text-xs text-amber-200">
+          <div className="font-semibold">⚠ Self-review: {verdict.reviewFlags.length} prior verdict(s) flagged</div>
+          <ul className="mt-1 list-disc pl-4 text-amber-300/90">
+            {verdict.reviewFlags.map((f, i) => (
+              <li key={i}>{f.priorSummary}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {verdict.council && (
         <div className="rounded border border-slate-700 bg-slate-900/50 p-2 text-xs">
           <div className="flex items-center justify-between">

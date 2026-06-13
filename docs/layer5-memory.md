@@ -33,6 +33,24 @@ self-review) arrives in Phase 6.
 - `POST /api/notes` — add a free-text note to the vault.
 - `GET /api/memory/recall?q=…` — see what memory holds for a query.
 
+## Adaptive learning (Phase 6)
+
+Learning here means **memory + feedback + patterns — never model retraining**
+(SPEC non-goals).
+
+- **Feedback Loop** (`FeedbackStore`) — user corrections/preferences are stored
+  as data and the relevant ones are injected into later synthesis prompts
+  ("corrections to honour"). The trace records when preferences are applied.
+  `POST /api/feedback`.
+- **Pattern Library** (`PatternLibrary`) — playbooks per case type. A question
+  matching a playbook's triggers reuses its seed hypotheses, so a repeat case
+  type is investigated faster/consistently. `POST /api/playbooks`.
+- **Self-Review** (`SelfReview`) — belief revision. When new evidence arrives, it
+  recalls related prior cases and flags any whose verdict the evidence
+  contradicts (subject overlap + polarity flip via negation/antonym). Flags ride
+  on the verdict (`reviewFlags`) and are surfaced in the UI; `POST /api/self-review`
+  checks a claim directly.
+
 ## Boundary
 
 `MemoryPort.recall/remember/rememberCase`. The store path is config-driven

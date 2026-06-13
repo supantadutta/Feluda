@@ -96,6 +96,8 @@ export interface Verdict {
   evidence?: Evidence[];
   /** Where models agreed/disagreed when the Council was consulted (Layer III). */
   council?: CouncilReport;
+  /** Prior verdicts this investigation's evidence appears to contradict (Layer V). */
+  reviewFlags?: ReviewFlag[];
   /**
    * Set when the request (or a generated answer) was blocked by the Ethics
    * layer. The answer then states the refusal and proposes a lawful path.
@@ -105,6 +107,13 @@ export interface Verdict {
     reason: string;
     lawfulAlternative: string;
   };
+}
+
+/** A prior verdict flagged for re-review because new evidence contradicts it. */
+export interface ReviewFlag {
+  priorSummary: string;
+  reason: string;
+  priorQueryId?: string;
 }
 
 /** Summary of a Multi-AI Council consultation (Layer III). */

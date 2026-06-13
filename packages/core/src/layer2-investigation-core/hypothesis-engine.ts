@@ -18,15 +18,25 @@ interface RawHypothesis {
 export class LlmHypothesisEngine implements HypothesisEngine {
   constructor(private readonly gateway: ModelGateway) {}
 
-  async generate(query: Query, evidence: Evidence[], memory: string[] = []): Promise<Hypothesis[]> {
+  async generate(
+    query: Query,
+    evidence: Evidence[],
+    memory: string[] = [],
+    opts: { seedHypotheses?: string[] } = {},
+  ): Promise<Hypothesis[]> {
     const evidenceBlock =
       evidence.length > 0
         ? `Evidence gathered:\n${evidence.map((e, i) => `[${i + 1}] ${e.claim}`).join('\n')}`
         : 'No external evidence is available; reason over the question and general knowledge.';
     const memoryBlock =
       memory.length > 0 ? `Prior context from memory:\n${memory.join('\n---\n')}` : '';
+    const seedBlock =
+      opts.seedHypotheses && opts.seedHypotheses.length > 0
+        ? `Consider these playbook seed hypotheses for this case type:\n${opts.seedHypotheses.join('\n')}`
+        : '';
     const prompt = [
       'TASK=HYPOTHESES',
+      seedBlock,
       memoryBlock,
       evidenceBlock,
       'Do NOT invent sources or citations.',

@@ -90,8 +90,9 @@ export class Council {
     hypotheses: Hypothesis[],
     evidence: Evidence[] = [],
     memory: string[] = [],
+    preferences: string[] = [],
   ): Promise<CouncilOutcome> {
-    const prompt = buildSynthesisPrompt(query, hypotheses, evidence, memory);
+    const prompt = buildSynthesisPrompt(query, hypotheses, evidence, memory, preferences);
     const cap = this.options.costCapUsd ?? Infinity;
     const estimated = this.members.reduce((s, m) => s + estimateCostUsd(prompt.length, m), 0);
 

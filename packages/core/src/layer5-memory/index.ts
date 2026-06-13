@@ -41,6 +41,9 @@ export interface MemoryPort {
 export { LocalEmbedder, cosine, type Embedder } from './embedder.js';
 export { InMemoryVectorStore, FileVectorStore } from './vector-store.js';
 export { KnowledgeVault } from './knowledge-vault.js';
+export { FeedbackStore, type Preference } from './feedback.js';
+export { PatternLibrary, type Playbook } from './pattern-library.js';
+export { SelfReview } from './self-review.js';
 
 export interface MemoryConfig {
   /** File path to persist the vector store. When absent, memory is in-process. */

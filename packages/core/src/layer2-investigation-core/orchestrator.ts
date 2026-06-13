@@ -12,7 +12,8 @@ import type { Citation, Evidence, Query, Verdict } from '../types.js';
 import type { ModelGateway, Council } from '../layer3-council/index.js';
 import type { CouncilReport } from '../types.js';
 import type { EvidencePort, GatheredEvidence } from '../layer4-evidence/index.js';
-import type { MemoryPort, MemoryItem } from '../layer5-memory/index.js';
+import type { MemoryPort, MemoryItem, FeedbackStore, PatternLibrary, SelfReview } from '../layer5-memory/index.js';
+import type { ReviewFlag } from '../types.js';
 import type { EthicsGate, AuditLog, GateDecision } from '../layer7-ethics/index.js';
 import { auditEntry } from '../layer7-ethics/audit.js';
 import { ArrayReasoningTracer } from './tracer.js';
@@ -32,6 +33,12 @@ export interface OrchestratorDeps {
   memory?: MemoryPort;
   /** Optional Multi-AI Council (III). When present, synthesis fans out to a panel. */
   council?: Council;
+  /** Adaptive learning (V): user corrections honoured in later answers. */
+  feedback?: FeedbackStore;
+  /** Adaptive learning (V): reusable playbooks per case type. */
+  patterns?: PatternLibrary;
+  /** Adaptive learning (V): belief revision when evidence contradicts a prior. */
+  selfReview?: SelfReview;
 }
 
 export class DeductionOrchestrator implements Orchestrator {
@@ -71,6 +78,16 @@ export class DeductionOrchestrator implements Orchestrator {
     }
     const memoryContext = recalled.map((m) => m.text);
 
+    // ── Adaptive learning (Layer V): honour corrections, apply playbooks ──
+    const preferences = this.deps.feedback?.relevant(query.text, 3).map((p) => p.text) ?? [];
+    if (preferences.length > 0) {
+      tracer.record('gather', `Honouring ${preferences.length} user preference(s) from feedback.`);
+    }
+    const playbook = this.deps.patterns?.match(query.text);
+    if (playbook) {
+      tracer.record('hypothesize', `Applied playbook "${playbook.caseType}" (reusing a prior reasoning template).`);
+    }
+
     // ── Gather evidence (Layer IV, when wired) ──
     let gathered: GatheredEvidence | undefined;
     if (this.deps.evidence) {
@@ -90,8 +107,27 @@ export class DeductionOrchestrator implements Orchestrator {
     }
     const evidence: Evidence[] = gathered?.evidence ?? [];
 
+    // ── Self-Review (Layer V): does new evidence contradict a prior verdict? ──
+    const reviewFlags: ReviewFlag[] = [];
+    if (this.deps.selfReview && evidence.length > 0) {
+      const seen = new Set<string>();
+      for (const e of evidence) {
+        for (const flag of await this.deps.selfReview.review(e.claim)) {
+          if (!seen.has(flag.priorSummary)) {
+            seen.add(flag.priorSummary);
+            reviewFlags.push(flag);
+          }
+        }
+      }
+      if (reviewFlags.length > 0) {
+        tracer.record('weigh', `Flagged ${reviewFlags.length} prior verdict(s) for re-review (belief revision).`);
+      }
+    }
+
     // ── Hypothesise → weigh ──
-    const hypotheses = await this.hypotheses.generate(query, evidence, memoryContext);
+    const hypotheses = await this.hypotheses.generate(query, evidence, memoryContext, {
+      seedHypotheses: playbook?.seedHypotheses,
+    });
     tracer.record(
       'hypothesize',
       `Formed ${hypotheses.length} competing hypotheses.`,
@@ -110,7 +146,7 @@ export class DeductionOrchestrator implements Orchestrator {
     let synth;
     let councilReport: CouncilReport | undefined;
     if (this.deps.council) {
-      const outcome = await this.deps.council.consult(query, weighed, evidence, memoryContext);
+      const outcome = await this.deps.council.consult(query, weighed, evidence, memoryContext, preferences);
       synth = outcome.synthesis;
       councilReport = outcome.report;
       tracer.record(
@@ -122,7 +158,7 @@ export class DeductionOrchestrator implements Orchestrator {
               `${councilReport.dissent.length > 0 ? '; dissent recorded' : ''}.`,
       );
     } else {
-      synth = await this.synthesizer.synthesize(query, weighed, evidence, memoryContext);
+      synth = await this.synthesizer.synthesize(query, weighed, evidence, memoryContext, preferences);
     }
     for (const step of synth.reasoning) tracer.record('weigh', step);
 
@@ -162,6 +198,7 @@ export class DeductionOrchestrator implements Orchestrator {
       hypotheses: weighed,
       evidence: evidence.length > 0 ? evidence : undefined,
       council: councilReport,
+      reviewFlags: reviewFlags.length > 0 ? reviewFlags : undefined,
     };
 
     // ── Write the finished case back to Memory (Layer V) ──

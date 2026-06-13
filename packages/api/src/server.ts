@@ -13,7 +13,7 @@ import {
 // `Council` namespace exposes both the gateway factory and createCouncil.
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 5;
+const PHASE = 6;
 
 interface InvestigateBody {
   question?: unknown;
@@ -61,11 +61,19 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
       })
     : undefined;
 
+  // Adaptive learning (Layer V): feedback, playbooks, and belief-revision.
+  const feedback = new Memory.FeedbackStore();
+  const patterns = new Memory.PatternLibrary();
+  const selfReview = new Memory.SelfReview(memory);
+
   const orchestrator = InvestigationCore.createOrchestrator({
     gateway,
     evidence,
     memory,
     council,
+    feedback,
+    patterns,
+    selfReview,
     audit,
   });
 
@@ -118,6 +126,42 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     const q = req.query.q;
     if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
     return { items: await memory.recall(q, 5) };
+  });
+
+  // Feedback Loop (Layer V): record a correction/preference to honour later.
+  app.post<{ Body: { text?: unknown } }>('/api/feedback', async (req, reply) => {
+    const { text } = req.body ?? {};
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "text" string is required.' });
+    }
+    return { preference: feedback.add(text.trim()) };
+  });
+
+  // Pattern Library (Layer V): save a reusable playbook for a case type.
+  app.post<{ Body: { caseType?: unknown; triggers?: unknown; seedHypotheses?: unknown } }>(
+    '/api/playbooks',
+    async (req, reply) => {
+      const { caseType, triggers, seedHypotheses } = req.body ?? {};
+      if (typeof caseType !== 'string' || !Array.isArray(triggers) || !Array.isArray(seedHypotheses)) {
+        return reply.code(400).send({ error: 'caseType, triggers[] and seedHypotheses[] are required.' });
+      }
+      return {
+        playbook: patterns.save({
+          caseType,
+          triggers: triggers.map(String),
+          seedHypotheses: seedHypotheses.map(String),
+        }),
+      };
+    },
+  );
+
+  // Self-Review (Layer V): check whether a new claim contradicts a prior verdict.
+  app.post<{ Body: { claim?: unknown } }>('/api/self-review', async (req, reply) => {
+    const { claim } = req.body ?? {};
+    if (typeof claim !== 'string' || claim.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "claim" string is required.' });
+    }
+    return { flags: await selfReview.review(claim.trim()) };
   });
 
   // Action layer (VI): perform a deliverable/admin action. Consequential kinds

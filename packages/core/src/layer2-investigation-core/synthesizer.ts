@@ -26,6 +26,7 @@ export function buildSynthesisPrompt(
   hypotheses: Hypothesis[],
   evidence: Evidence[] = [],
   memory: string[] = [],
+  preferences: string[] = [],
 ): string {
   const hypoSummary = hypotheses.map((h) => ({ statement: h.statement, belief: h.belief }));
   const evidenceBlock =
@@ -36,10 +37,15 @@ export function buildSynthesisPrompt(
       : 'No external sources are available; rely on general knowledge and say so.';
   const memoryBlock =
     memory.length > 0 ? `Prior context from memory (use if relevant):\n${memory.join('\n---\n')}` : '';
+  const prefBlock =
+    preferences.length > 0
+      ? `User corrections/preferences to honour:\n${preferences.map((p) => `- ${p}`).join('\n')}`
+      : '';
   return [
     'TASK=SYNTHESIS',
     'Give your reasoned verdict. Ground claims in the evidence below where possible.',
     'Never fabricate citations or URLs. Be calibrated — if uncertain, say so and lower confidence.',
+    prefBlock,
     memoryBlock,
     evidenceBlock,
     `Question: "${query.text}"`,
@@ -71,8 +77,9 @@ export class LlmSynthesizer {
     hypotheses: Hypothesis[],
     evidence: Evidence[] = [],
     memory: string[] = [],
+    preferences: string[] = [],
   ): Promise<SynthesisResult> {
-    const prompt = buildSynthesisPrompt(query, hypotheses, evidence, memory);
+    const prompt = buildSynthesisPrompt(query, hypotheses, evidence, memory, preferences);
     const res = await this.gateway.complete({ system: SYNTH_SYSTEM, prompt, task: 'general' });
     return parseSynthesis(res.text);
   }

@@ -9,8 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // No bundled icon assets yet (Phase 0); the dashboard polish in Phase 7
-      // ships proper icons. Manifest is valid without them for dev.
+      includeAssets: ['icon.svg'],
       manifest: {
         name: 'Feluda — Investigative Reasoning Assistant',
         short_name: 'Feluda',
@@ -19,7 +18,9 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         start_url: '/',
-        icons: [],
+        icons: [
+          { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+        ],
       },
     }),
   ],

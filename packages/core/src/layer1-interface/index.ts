@@ -30,3 +30,10 @@ export function createInterfacePort(orchestrator: Orchestrator): InterfacePort {
     ask: (turn) => orchestrator.investigate(turn.query),
   };
 }
+
+export {
+  BriefingScheduler,
+  type Briefing,
+  type BriefingDigest,
+  type BriefingRunner,
+} from './briefings.js';

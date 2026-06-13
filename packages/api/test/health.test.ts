@@ -29,7 +29,7 @@ describe('api /health', () => {
     expect(res.json()).toMatchObject({
       status: 'ok',
       service: 'feluda-api',
-      phase: 6,
+      phase: 7,
       modelMode: 'offline-stub',
       evidenceMode: 'offline-fixture',
       councilMode: 'disabled',

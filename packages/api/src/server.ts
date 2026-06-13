@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import {
   FELUDA_CORE_VERSION,
+  InterfaceLayer,
   InvestigationCore,
   Council,
   Evidence,
@@ -13,7 +14,7 @@ import {
 // `Council` namespace exposes both the gateway factory and createCouncil.
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 6;
+const PHASE = 7;
 
 interface InvestigateBody {
   question?: unknown;
@@ -80,6 +81,20 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   // Action layer (VI). Consequential actions are blocked until confirmed.
   const action = Action.createActionPort();
 
+  // Briefings (Layer I): scheduled digests. Runs an investigation per topic.
+  const recentDigests: InterfaceLayer.BriefingDigest[] = [];
+  const briefings = new InterfaceLayer.BriefingScheduler((topic) =>
+    orchestrator.investigate({ id: `b_${Date.now().toString(36)}`, text: topic, receivedAt: new Date().toISOString() }),
+  );
+  if (config.nodeEnv !== 'test') {
+    setInterval(() => {
+      briefings
+        .runDue()
+        .then((ds) => recentDigests.push(...ds))
+        .catch((err) => app.log.error(err));
+    }, 60_000).unref();
+  }
+
   app.get('/health', async () => ({
     status: 'ok',
     service: 'feluda-api',
@@ -126,6 +141,25 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     const q = req.query.q;
     if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
     return { items: await memory.recall(q, 5) };
+  });
+
+  // Briefings (Layer I): schedule, list, and run digests.
+  app.post<{ Body: { topic?: unknown; intervalMs?: unknown } }>('/api/briefings', async (req, reply) => {
+    const { topic, intervalMs } = req.body ?? {};
+    if (typeof topic !== 'string' || topic.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "topic" string is required.' });
+    }
+    const every = typeof intervalMs === 'number' && intervalMs > 0 ? intervalMs : 3_600_000;
+    return { briefing: briefings.schedule(topic.trim(), every) };
+  });
+
+  app.get('/api/briefings', async () => ({ briefings: briefings.list(), recent: recentDigests.slice(-10) }));
+
+  app.post<{ Params: { id: string } }>('/api/briefings/:id/run', async (req, reply) => {
+    const digest = await briefings.run(req.params.id);
+    if (!digest) return reply.code(404).send({ error: 'No such briefing.' });
+    recentDigests.push(digest);
+    return { digest };
   });
 
   // Feedback Loop (Layer V): record a correction/preference to honour later.

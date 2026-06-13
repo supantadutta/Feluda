@@ -43,6 +43,7 @@ export interface ApprovalGate {
 
 export { RuleBasedEthicsGate } from './gate.js';
 export { InMemoryAuditLog, FileAuditLog, auditEntry } from './audit.js';
+export { ConsequentialApprovalGate, createApprovalGate } from './approval.js';
 
 /** The default Ethics gate — rule-based screening of requests and responses. */
 export function createEthicsGate(): EthicsGate {

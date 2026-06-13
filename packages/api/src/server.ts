@@ -6,13 +6,14 @@ import {
   Council,
   Evidence,
   Memory,
+  Action,
   Ethics,
   type Verdict,
 } from '@feluda/core';
 // `Council` namespace exposes both the gateway factory and createCouncil.
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 4;
+const PHASE = 5;
 
 interface InvestigateBody {
   question?: unknown;
@@ -68,6 +69,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     audit,
   });
 
+  // Action layer (VI). Consequential actions are blocked until confirmed.
+  const action = Action.createActionPort();
+
   app.get('/health', async () => ({
     status: 'ok',
     service: 'feluda-api',
@@ -114,6 +118,23 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     const q = req.query.q;
     if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
     return { items: await memory.recall(q, 5) };
+  });
+
+  // Action layer (VI): perform a deliverable/admin action. Consequential kinds
+  // are gated — the response sets awaitingApproval until payload.confirmed=true.
+  app.post<{ Body: { kind?: unknown; payload?: unknown } }>('/api/actions', async (req, reply) => {
+    const { kind, payload } = req.body ?? {};
+    if (typeof kind !== 'string') {
+      return reply.code(400).send({ error: 'A "kind" string is required.' });
+    }
+    const result = await action.perform({
+      kind,
+      payload: (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>,
+    });
+    audit.record(
+      Ethics.auditEntry('action.performed', { kind, ok: result.ok, awaitingApproval: result.awaitingApproval ?? false }),
+    );
+    return reply.code(result.ok ? 200 : result.awaitingApproval ? 202 : 400).send(result);
   });
 
   // Doc & Data Ingest (Layer IV stretch): parse a user document into evidence

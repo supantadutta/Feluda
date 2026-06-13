@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   FELUDA_CORE_VERSION,
-  NotImplementedError,
   InterfaceLayer,
   InvestigationCore,
   Council,
@@ -12,8 +11,7 @@ import {
 } from '../src/index.js';
 
 /**
- * Phase 0 smoke test: every layer module imports and exposes its boundary, and
- * the not-yet-implemented placeholders fail loudly rather than silently.
+ * Smoke test: every layer module imports and exposes its boundary.
  */
 describe('core scaffold', () => {
   it('exposes a version marker', () => {
@@ -35,11 +33,9 @@ describe('core scaffold', () => {
     expect(gate.screenRequest('what is the capital of France?').allowed).toBe(true);
   });
 
-  it('not-yet-built layers still throw NotImplementedError', () => {
-    // Layer VI (Action) lands in Phase 5.
+  it('all 7 layers are implemented (Action performs through the approval gate)', async () => {
     const action = Action.createActionPort();
-    expect(() =>
-      action.perform({ kind: 'report.export', consequential: false, payload: {} }),
-    ).toThrow(NotImplementedError);
+    const res = await action.perform({ kind: 'ops.task.add', payload: { title: 'review case' } });
+    expect(res.ok).toBe(true);
   });
 });

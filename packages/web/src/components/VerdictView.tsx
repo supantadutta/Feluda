@@ -29,6 +29,31 @@ export function VerdictView({ verdict }: { verdict: Verdict }): JSX.Element {
         <ConfidenceBadge confidence={verdict.confidence} />
       </div>
 
+      {verdict.council && (
+        <div className="rounded border border-slate-700 bg-slate-900/50 p-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-300">
+              Council · {verdict.council.panel.length} model(s)
+            </span>
+            <span
+              className={
+                verdict.council.agreement >= 0.6 ? 'text-emerald-300' : 'text-amber-300'
+              }
+            >
+              {(verdict.council.agreement * 100).toFixed(0)}% agreement
+              {verdict.council.fellBackToSingle ? ' · single-model fallback' : ''}
+            </span>
+          </div>
+          {verdict.council.dissent.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-slate-400">
+              {verdict.council.dissent.map((d, i) => (
+                <li key={i}>{d}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {verdict.confidence.gaps.length > 0 && (
         <div className="text-xs text-slate-400">
           <span className="font-semibold text-slate-300">Gaps:</span>{' '}

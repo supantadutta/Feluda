@@ -17,6 +17,10 @@ export interface Config {
   searchApiKey?: string;
   /** Path to the local vector store (Layer V). */
   vectorStorePath: string;
+  /** Multi-AI Council (Layer III). */
+  councilEnabled: boolean;
+  councilModels: string[];
+  councilCostCapUsd: number;
 }
 
 export function loadConfig(): Config {
@@ -28,5 +32,11 @@ export function loadConfig(): Config {
     defaultModel: process.env.FELUDA_DEFAULT_MODEL ?? 'claude-opus-4-8',
     searchApiKey: process.env.WEB_SEARCH_API_KEY || undefined,
     vectorStorePath: process.env.VECTOR_STORE_PATH ?? './data/vector-store/store.json',
+    councilEnabled: process.env.COUNCIL_ENABLED === 'true',
+    councilModels: (process.env.FELUDA_COUNCIL_MODELS ?? '')
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean),
+    councilCostCapUsd: Number(process.env.COUNCIL_COST_CAP_USD ?? 0.5),
   };
 }

@@ -16,6 +16,9 @@ describe('POST /api/investigate', () => {
       webOrigin: 'http://localhost:5173',
       defaultModel: 'claude-opus-4-8',
       vectorStorePath: '',
+      councilEnabled: false,
+      councilModels: [],
+      councilCostCapUsd: 0.5,
     });
   });
 

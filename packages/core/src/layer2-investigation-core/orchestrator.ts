@@ -9,7 +9,8 @@
  * and recorded to the audit log.
  */
 import type { Citation, Evidence, Query, Verdict } from '../types.js';
-import type { ModelGateway } from '../layer3-council/index.js';
+import type { ModelGateway, Council } from '../layer3-council/index.js';
+import type { CouncilReport } from '../types.js';
 import type { EvidencePort, GatheredEvidence } from '../layer4-evidence/index.js';
 import type { MemoryPort, MemoryItem } from '../layer5-memory/index.js';
 import type { EthicsGate, AuditLog, GateDecision } from '../layer7-ethics/index.js';
@@ -29,6 +30,8 @@ export interface OrchestratorDeps {
   evidence?: EvidencePort;
   /** Optional Memory layer (V). When present, prior notes/cases are recalled. */
   memory?: MemoryPort;
+  /** Optional Multi-AI Council (III). When present, synthesis fans out to a panel. */
+  council?: Council;
 }
 
 export class DeductionOrchestrator implements Orchestrator {
@@ -103,8 +106,24 @@ export class DeductionOrchestrator implements Orchestrator {
       weighed.map((h) => h.id),
     );
 
-    // ── Synthesise the verdict ──
-    const synth = await this.synthesizer.synthesize(query, weighed, evidence, memoryContext);
+    // ── Synthesise the verdict (optionally cross-examined by the Council) ──
+    let synth;
+    let councilReport: CouncilReport | undefined;
+    if (this.deps.council) {
+      const outcome = await this.deps.council.consult(query, weighed, evidence, memoryContext);
+      synth = outcome.synthesis;
+      councilReport = outcome.report;
+      tracer.record(
+        'cross-examine',
+        councilReport.fellBackToSingle
+          ? `Council fell back to a single model (${councilReport.panel.join(', ')}).`
+          : `Consulted a panel of ${councilReport.panel.length} ` +
+              `(${(councilReport.agreement * 100).toFixed(0)}% agreement)` +
+              `${councilReport.dissent.length > 0 ? '; dissent recorded' : ''}.`,
+      );
+    } else {
+      synth = await this.synthesizer.synthesize(query, weighed, evidence, memoryContext);
+    }
     for (const step of synth.reasoning) tracer.record('weigh', step);
 
     const confidence = this.calibrator.calibrate(weighed, evidence, {
@@ -142,6 +161,7 @@ export class DeductionOrchestrator implements Orchestrator {
       citations,
       hypotheses: weighed,
       evidence: evidence.length > 0 ? evidence : undefined,
+      council: councilReport,
     };
 
     // ── Write the finished case back to Memory (Layer V) ──

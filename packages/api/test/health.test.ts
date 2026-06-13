@@ -13,6 +13,9 @@ describe('api /health', () => {
       webOrigin: 'http://localhost:5173',
       defaultModel: 'claude-opus-4-8',
       vectorStorePath: '',
+      councilEnabled: false,
+      councilModels: [],
+      councilCostCapUsd: 0.5,
     });
   });
 
@@ -26,9 +29,10 @@ describe('api /health', () => {
     expect(res.json()).toMatchObject({
       status: 'ok',
       service: 'feluda-api',
-      phase: 3,
+      phase: 4,
       modelMode: 'offline-stub',
       evidenceMode: 'offline-fixture',
+      councilMode: 'disabled',
     });
   });
 });

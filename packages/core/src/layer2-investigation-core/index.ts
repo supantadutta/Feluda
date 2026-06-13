@@ -18,7 +18,7 @@ import type {
   ReasoningTrace,
   Verdict,
 } from '../types.js';
-import type { ModelGateway } from '../layer3-council/index.js';
+import type { ModelGateway, Council } from '../layer3-council/index.js';
 import type { EvidencePort } from '../layer4-evidence/index.js';
 import type { MemoryPort } from '../layer5-memory/index.js';
 import type { EthicsGate, AuditLog } from '../layer7-ethics/index.js';
@@ -68,6 +68,8 @@ export interface CreateOrchestratorConfig {
   evidence?: EvidencePort;
   /** Memory layer (V). Pass to recall prior notes/cases and persist new ones. */
   memory?: MemoryPort;
+  /** Multi-AI Council (III). Pass to cross-examine synthesis across a panel. */
+  council?: Council;
 }
 
 /**
@@ -82,5 +84,6 @@ export function createOrchestrator(config: CreateOrchestratorConfig = {}): Orche
     audit: config.audit ?? new InMemoryAuditLog(),
     evidence: config.evidence,
     memory: config.memory,
+    council: config.council,
   });
 }

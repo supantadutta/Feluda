@@ -9,9 +9,10 @@ import {
   Ethics,
   type Verdict,
 } from '@feluda/core';
+// `Council` namespace exposes both the gateway factory and createCouncil.
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 3;
+const PHASE = 4;
 
 interface InvestigateBody {
   question?: unknown;
@@ -45,7 +46,27 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
   const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
   const audit = new Ethics.FileAuditLog();
-  const orchestrator = InvestigationCore.createOrchestrator({ gateway, evidence, memory, audit });
+
+  // Multi-AI Council (Layer III) — opt-in. Seats one model id per panel member;
+  // defaults to two seats on the default model so the mechanism is demonstrable.
+  const council = config.councilEnabled
+    ? Council.createCouncil({
+        gateway,
+        models:
+          config.councilModels.length >= 2
+            ? config.councilModels
+            : [config.defaultModel, config.defaultModel],
+        costCapUsd: config.councilCostCapUsd,
+      })
+    : undefined;
+
+  const orchestrator = InvestigationCore.createOrchestrator({
+    gateway,
+    evidence,
+    memory,
+    council,
+    audit,
+  });
 
   app.get('/health', async () => ({
     status: 'ok',
@@ -55,6 +76,7 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     /** Tells the client whether real reasoning is available. */
     modelMode: config.anthropicApiKey ? 'live' : 'offline-stub',
     evidenceMode: config.searchApiKey ? 'live' : 'offline-fixture',
+    councilMode: council ? 'enabled' : 'disabled',
   }));
 
   app.post<{ Body: InvestigateBody }>('/api/investigate', async (req, reply) => {

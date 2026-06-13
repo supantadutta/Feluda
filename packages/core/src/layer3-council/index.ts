@@ -46,6 +46,35 @@ export interface ModelGateway {
 
 export { StubGateway } from './providers/stub.js';
 export { AnthropicGateway, type AnthropicGatewayConfig } from './providers/anthropic.js';
+export {
+  Council,
+  agreementOf,
+  type PanelMember,
+  type CouncilOptions,
+  type CouncilOutcome,
+} from './panel.js';
+export { SpecialistRouter, type TaskType } from './routing.js';
+
+import { Council, type PanelMember } from './panel.js';
+
+export interface CreateCouncilConfig {
+  gateway: ModelGateway;
+  /** Model ids that form the panel (≥2 to actually deliberate). */
+  models: string[];
+  costCapUsd?: number;
+  usdPer1k?: number;
+}
+
+/** Build a Council that seats one model id per panel member over a gateway. */
+export function createCouncil(config: CreateCouncilConfig): Council {
+  const members: PanelMember[] = config.models.map((model, i) => ({
+    id: `${model}#${i + 1}`,
+    gateway: config.gateway,
+    model,
+    usdPer1k: config.usdPer1k,
+  }));
+  return new Council(members, config.gateway, { costCapUsd: config.costCapUsd });
+}
 
 export interface GatewayConfig {
   /** Anthropic API key. When absent, the offline stub is used. */

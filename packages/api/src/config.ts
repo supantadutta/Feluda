@@ -13,6 +13,8 @@ export interface Config {
   anthropicApiKey?: string;
   /** Default model id for the gateway. */
   defaultModel: string;
+  /** Web search key (Layer IV). When absent, offline fixtures are used. */
+  searchApiKey?: string;
 }
 
 export function loadConfig(): Config {
@@ -22,5 +24,6 @@ export function loadConfig(): Config {
     webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
     defaultModel: process.env.FELUDA_DEFAULT_MODEL ?? 'claude-opus-4-8',
+    searchApiKey: process.env.WEB_SEARCH_API_KEY || undefined,
   };
 }

@@ -29,6 +29,8 @@ export interface Evidence {
   credibility: number;
   /** 0..1 relevance to the query, assigned by the Evidence Weigher. */
   relevance: number;
+  /** Quality flags, e.g. 'single-source', 'low-credibility', 'offline-fixture'. */
+  flags?: string[];
 }
 
 /** The non-negotiable hard boundaries (CLAUDE.md / Layer VII). */
@@ -90,6 +92,10 @@ export interface Verdict {
   citations: Citation[];
   /** Hypotheses considered, with final belief, for transparency. */
   hypotheses: Hypothesis[];
+  /** The evidence gathered for this query (Layer IV), with quality flags. */
+  evidence?: Evidence[];
+  /** Where models agreed/disagreed when the Council was consulted (Layer III). */
+  council?: CouncilReport;
   /**
    * Set when the request (or a generated answer) was blocked by the Ethics
    * layer. The answer then states the refusal and proposes a lawful path.
@@ -99,6 +105,18 @@ export interface Verdict {
     reason: string;
     lawfulAlternative: string;
   };
+}
+
+/** Summary of a Multi-AI Council consultation (Layer III). */
+export interface CouncilReport {
+  /** Models that took part. */
+  panel: string[];
+  /** 0..1 agreement across the panel (1 = unanimous). */
+  agreement: number;
+  /** Points where the panel diverged — divergence is signal, not noise. */
+  dissent: string[];
+  /** Whether the cost cap forced a single-model fallback. */
+  fellBackToSingle: boolean;
 }
 
 /** A single structured audit-log entry (Layer VII — Audit & Approval). */

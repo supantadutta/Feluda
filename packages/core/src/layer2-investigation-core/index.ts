@@ -19,6 +19,7 @@ import type {
   Verdict,
 } from '../types.js';
 import type { ModelGateway } from '../layer3-council/index.js';
+import type { EvidencePort } from '../layer4-evidence/index.js';
 import type { EthicsGate, AuditLog } from '../layer7-ethics/index.js';
 import { createModelGateway } from '../layer3-council/index.js';
 import { createEthicsGate, InMemoryAuditLog } from '../layer7-ethics/index.js';
@@ -62,17 +63,20 @@ export interface CreateOrchestratorConfig {
   gateway?: ModelGateway;
   ethics?: EthicsGate;
   audit?: AuditLog;
+  /** Evidence layer (IV). Pass to enable the "gather evidence" step. */
+  evidence?: EvidencePort;
 }
 
 /**
  * Build the deduction-loop orchestrator. Defaults wire an offline-capable
  * gateway, the rule-based Ethics gate, and an in-memory audit log; the API
- * server overrides these with a live Anthropic gateway and a file audit log.
+ * server overrides these with live providers and a file audit log.
  */
 export function createOrchestrator(config: CreateOrchestratorConfig = {}): Orchestrator {
   return new DeductionOrchestrator({
     gateway: config.gateway ?? createModelGateway(),
     ethics: config.ethics ?? createEthicsGate(),
     audit: config.audit ?? new InMemoryAuditLog(),
+    evidence: config.evidence,
   });
 }

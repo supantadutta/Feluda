@@ -36,10 +36,8 @@ describe('core scaffold', () => {
   });
 
   it('not-yet-built layers still throw NotImplementedError', () => {
-    // Layer IV (Evidence) lands in Phase 2.
-    const evidence = Evidence.createEvidencePort();
-    expect(() => evidence.gather({ id: 'q', text: 'x', receivedAt: '' })).toThrow(
-      NotImplementedError,
-    );
+    // Layer V (Memory) lands in Phase 3.
+    const memory = Memory.createMemoryPort();
+    expect(() => memory.recall('x', 3)).toThrow(NotImplementedError);
   });
 });

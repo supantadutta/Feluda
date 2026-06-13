@@ -25,8 +25,9 @@ describe('api /health', () => {
     expect(res.json()).toMatchObject({
       status: 'ok',
       service: 'feluda-api',
-      phase: 1,
+      phase: 2,
       modelMode: 'offline-stub',
+      evidenceMode: 'offline-fixture',
     });
   });
 });

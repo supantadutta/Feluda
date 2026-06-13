@@ -78,11 +78,37 @@ export function VerdictView({ verdict }: { verdict: Verdict }): JSX.Element {
         </details>
       )}
 
-      <div className="text-xs text-slate-500">
-        {verdict.citations.length === 0
-          ? 'No external citations — Phase 1 reasons over the question and general knowledge.'
-          : `${verdict.citations.length} citation(s).`}
-      </div>
+      {verdict.citations.length === 0 ? (
+        <div className="text-xs text-slate-500">
+          No external citations — reasoning over the question and general knowledge.
+        </div>
+      ) : (
+        <details open>
+          <summary className="cursor-pointer text-sm font-medium text-sky-300 hover:text-sky-200">
+            Citation trail ({verdict.citations.length})
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {verdict.citations.map((c, i) => {
+              const flags = verdict.evidence?.find((e) => e.citation.source === c.source)?.flags;
+              return (
+                <li key={i} className="text-xs">
+                  <a
+                    href={c.source}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sky-400 hover:underline break-all"
+                  >
+                    {c.title ?? c.source}
+                  </a>
+                  {flags && flags.length > 0 && (
+                    <span className="ml-2 text-amber-400">⚑ {flags.join(', ')}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

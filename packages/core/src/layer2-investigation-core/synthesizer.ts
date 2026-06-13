@@ -4,7 +4,7 @@
  * confidence. The Confidence Calibrator has the final say on the number; this
  * provides the model's own honest read plus the gaps it sees.
  */
-import type { Hypothesis, Query } from '../types.js';
+import type { Evidence, Hypothesis, Query } from '../types.js';
 import type { ModelGateway } from '../layer3-council/index.js';
 import { extractJson, clamp01 } from '../util/json.js';
 
@@ -20,13 +20,23 @@ export interface SynthesisResult {
 export class LlmSynthesizer {
   constructor(private readonly gateway: ModelGateway) {}
 
-  async synthesize(query: Query, hypotheses: Hypothesis[]): Promise<SynthesisResult> {
+  async synthesize(
+    query: Query,
+    hypotheses: Hypothesis[],
+    evidence: Evidence[] = [],
+  ): Promise<SynthesisResult> {
     const hypoSummary = hypotheses.map((h) => ({ statement: h.statement, belief: h.belief }));
+    const evidenceBlock =
+      evidence.length > 0
+        ? `Evidence (cite by [n], do not invent others):\n${evidence
+            .map((e, i) => `[${i + 1}] ${e.claim} — ${e.citation.source}`)
+            .join('\n')}`
+        : 'No external sources are available; rely on general knowledge and say so.';
     const prompt = [
       'TASK=SYNTHESIS',
-      'Give your reasoned verdict. No external sources are available; rely on general knowledge',
-      'and say so. Never fabricate citations. Be calibrated — if uncertain, say so and lower',
-      'confidence.',
+      'Give your reasoned verdict. Ground claims in the evidence below where possible.',
+      'Never fabricate citations or URLs. Be calibrated — if uncertain, say so and lower confidence.',
+      evidenceBlock,
       `Question: "${query.text}"`,
       `Hypotheses: ${JSON.stringify(hypoSummary)}`,
       'Return ONLY JSON: {"answer":string,"reasoning":[string, ... 2 to 5 steps],',

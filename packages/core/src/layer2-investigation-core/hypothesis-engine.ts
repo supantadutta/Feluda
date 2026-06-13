@@ -18,11 +18,15 @@ interface RawHypothesis {
 export class LlmHypothesisEngine implements HypothesisEngine {
   constructor(private readonly gateway: ModelGateway) {}
 
-  async generate(query: Query, _evidence: Evidence[]): Promise<Hypothesis[]> {
+  async generate(query: Query, evidence: Evidence[]): Promise<Hypothesis[]> {
+    const evidenceBlock =
+      evidence.length > 0
+        ? `Evidence gathered:\n${evidence.map((e, i) => `[${i + 1}] ${e.claim}`).join('\n')}`
+        : 'No external evidence is available; reason over the question and general knowledge.';
     const prompt = [
       'TASK=HYPOTHESES',
-      'No external evidence is available in this phase; reason over the question and general',
-      'knowledge. Do NOT invent sources or citations.',
+      evidenceBlock,
+      'Do NOT invent sources or citations.',
       `Question: "${query.text}"`,
       'Return ONLY JSON: {"hypotheses":[{"statement":string,"belief":number}, ... 2 to 4 items]}.',
       'belief is your prior plausibility in 0..1; they need not sum to 1.',

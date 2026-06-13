@@ -4,12 +4,13 @@ import {
   FELUDA_CORE_VERSION,
   InvestigationCore,
   Council,
+  Evidence,
   Ethics,
   type Verdict,
 } from '@feluda/core';
 import { loadConfig, type Config } from './config.js';
 
-const PHASE = 1;
+const PHASE = 2;
 
 interface InvestigateBody {
   question?: unknown;
@@ -40,8 +41,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     apiKey: config.anthropicApiKey,
     model: config.defaultModel,
   });
+  const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
   const audit = new Ethics.FileAuditLog();
-  const orchestrator = InvestigationCore.createOrchestrator({ gateway, audit });
+  const orchestrator = InvestigationCore.createOrchestrator({ gateway, evidence, audit });
 
   app.get('/health', async () => ({
     status: 'ok',
@@ -50,6 +52,7 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     phase: PHASE,
     /** Tells the client whether real reasoning is available. */
     modelMode: config.anthropicApiKey ? 'live' : 'offline-stub',
+    evidenceMode: config.searchApiKey ? 'live' : 'offline-fixture',
   }));
 
   app.post<{ Body: InvestigateBody }>('/api/investigate', async (req, reply) => {
@@ -70,6 +73,24 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
 
     return verdict;
   });
+
+  // Doc & Data Ingest (Layer IV stretch): parse a user document into evidence
+  // chunks, each carrying provenance back to the file. Text/markdown in Phase 2.
+  app.post<{ Body: { name?: unknown; mime?: unknown; content?: unknown } }>(
+    '/api/ingest',
+    async (req, reply) => {
+      const { name, mime, content } = req.body ?? {};
+      if (typeof name !== 'string' || typeof mime !== 'string' || typeof content !== 'string') {
+        return reply.code(400).send({ error: 'name, mime and content strings are required.' });
+      }
+      try {
+        const evidence = new Evidence.DocIngestor().ingest({ name, mime, content });
+        return { evidence };
+      } catch (err) {
+        return reply.code(415).send({ error: err instanceof Error ? err.message : 'Unsupported.' });
+      }
+    },
+  );
 
   return app;
 }

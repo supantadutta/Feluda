@@ -17,11 +17,16 @@ function bandFor(score: number): Confidence['band'] {
   return 'low';
 }
 
+const SINGLE_SOURCE_GAP =
+  'Claims are not independently corroborated (fewer than two credible, independent sources).';
+
 export interface CalibrateOptions {
   /** A confidence score the model proposed for its own answer. */
   modelScore?: number;
   /** Additional gaps surfaced by the synthesizer. */
   extraGaps?: string[];
+  /** Whether ≥2 independent credible sources corroborate the evidence. */
+  corroborated?: boolean;
 }
 
 export class BandConfidenceCalibrator implements ConfidenceCalibrator {
@@ -34,6 +39,10 @@ export class BandConfidenceCalibrator implements ConfidenceCalibrator {
       // Calibrated honesty: thin evidence cannot yield high confidence.
       score = Math.min(score, 0.69);
       gaps.add(NO_EVIDENCE_GAP);
+    } else if (opts.corroborated === false) {
+      // Evidence exists but stands on a single source — still cap below "high".
+      score = Math.min(score, 0.69);
+      gaps.add(SINGLE_SOURCE_GAP);
     }
 
     return { score, band: bandFor(score), gaps: [...gaps] };

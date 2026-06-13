@@ -34,7 +34,10 @@ describe('POST /api/investigate', () => {
     expect(Array.isArray(body.trace)).toBe(true);
     expect(body.trace.length).toBeGreaterThan(0);
     expect(body.confidence.band).toMatch(/low|medium|high/);
-    expect(body.citations).toEqual([]);
+    // Phase 2: the citation trail is populated from gathered evidence.
+    expect(Array.isArray(body.citations)).toBe(true);
+    expect(body.citations.length).toBeGreaterThan(0);
+    for (const c of body.citations) expect(typeof c.source).toBe('string');
   });
 
   it('rejects an empty question', async () => {

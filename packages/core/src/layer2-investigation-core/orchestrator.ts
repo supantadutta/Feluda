@@ -8,8 +8,9 @@
  * short-circuit. Every turn is screened by Ethics (VII) on the way in and out,
  * and recorded to the audit log.
  */
-import type { Query, Verdict } from '../types.js';
+import type { Citation, Evidence, Query, Verdict } from '../types.js';
 import type { ModelGateway } from '../layer3-council/index.js';
+import type { EvidencePort, GatheredEvidence } from '../layer4-evidence/index.js';
 import type { EthicsGate, AuditLog, GateDecision } from '../layer7-ethics/index.js';
 import { auditEntry } from '../layer7-ethics/audit.js';
 import { ArrayReasoningTracer } from './tracer.js';
@@ -23,6 +24,8 @@ export interface OrchestratorDeps {
   gateway: ModelGateway;
   ethics: EthicsGate;
   audit: AuditLog;
+  /** Optional Evidence layer (IV). When absent, the loop reasons unaided. */
+  evidence?: EvidencePort;
 }
 
 export class DeductionOrchestrator implements Orchestrator {
@@ -52,35 +55,54 @@ export class DeductionOrchestrator implements Orchestrator {
       return this.refusal(query, inbound, tracer);
     }
 
-    // ── Gather (short-circuited in Phase 1) ──
-    tracer.record(
-      'gather',
-      'No evidence layer yet (Phase 1): reasoning over the question and general knowledge; no external citations.',
-    );
+    // ── Gather evidence (Layer IV, when wired) ──
+    let gathered: GatheredEvidence | undefined;
+    if (this.deps.evidence) {
+      gathered = await this.deps.evidence.gather(query);
+      const { evidence, corroboration, offline } = gathered;
+      tracer.record(
+        'gather',
+        `Gathered ${evidence.length} source(s)${offline ? ' (offline fixtures)' : ''}; ` +
+          `${corroboration.independentSources} independent host(s); ` +
+          `${corroboration.corroborated ? 'corroborated' : 'NOT independently corroborated'}.`,
+      );
+    } else {
+      tracer.record(
+        'gather',
+        'No evidence layer wired: reasoning over the question and general knowledge; no external citations.',
+      );
+    }
+    const evidence: Evidence[] = gathered?.evidence ?? [];
 
     // ── Hypothesise → weigh ──
-    const hypotheses = await this.hypotheses.generate(query, []);
+    const hypotheses = await this.hypotheses.generate(query, evidence);
     tracer.record(
       'hypothesize',
       `Formed ${hypotheses.length} competing hypotheses.`,
       hypotheses.map((h) => h.id),
     );
-    const weighed = await this.weigher.weigh(hypotheses, []);
+    const weighed = await this.weigher.weigh(hypotheses, evidence);
     tracer.record(
       'weigh',
-      'Normalised hypothesis priors (no external evidence to update on yet).',
+      evidence.length > 0
+        ? 'Weighed hypotheses against the gathered evidence.'
+        : 'Normalised hypothesis priors (no external evidence to update on yet).',
       weighed.map((h) => h.id),
     );
 
     // ── Synthesise the verdict ──
-    const synth = await this.synthesizer.synthesize(query, weighed);
+    const synth = await this.synthesizer.synthesize(query, weighed, evidence);
     for (const step of synth.reasoning) tracer.record('weigh', step);
 
-    const confidence = this.calibrator.calibrate(weighed, [], {
+    const confidence = this.calibrator.calibrate(weighed, evidence, {
       modelScore: synth.modelScore,
       extraGaps: synth.gaps,
+      corroborated: gathered?.corroboration.corroborated,
     });
     tracer.record('verdict', synth.answer || '(no answer produced)');
+
+    // Citation trail: ONLY from gathered evidence — never invented by the model.
+    const citations: Citation[] = dedupeCitations(evidence.map((e) => e.citation));
 
     // ── Screen the outbound answer (Layer VII) ──
     const outbound = ethics.screenResponse(synth.answer);
@@ -95,6 +117,7 @@ export class DeductionOrchestrator implements Orchestrator {
         confidence: confidence.band,
         score: confidence.score,
         hypotheses: weighed.length,
+        sources: citations.length,
       }),
     );
 
@@ -103,8 +126,9 @@ export class DeductionOrchestrator implements Orchestrator {
       answer: synth.answer,
       trace: tracer.trace(),
       confidence,
-      citations: [],
+      citations,
       hypotheses: weighed,
+      evidence: evidence.length > 0 ? evidence : undefined,
     };
   }
 
@@ -123,4 +147,11 @@ export class DeductionOrchestrator implements Orchestrator {
       refusal: { boundary, reason: decision.reason ?? '', lawfulAlternative: alt },
     };
   }
+}
+
+/** Collapse citations that point at the same source. */
+function dedupeCitations(citations: Citation[]): Citation[] {
+  const seen = new Map<string, Citation>();
+  for (const c of citations) if (!seen.has(c.source)) seen.set(c.source, c);
+  return [...seen.values()];
 }

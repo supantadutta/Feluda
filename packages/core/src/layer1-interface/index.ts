@@ -6,10 +6,10 @@
  * Orchestrator (Layer II); concrete transports (HTTP, web UI) live in @feluda/api
  * and @feluda/web.
  *
- * Phase: chat UI lands in Phase 1; dashboard/briefings/voice in Phase 7.
+ * Phase: chat UI + this port land in Phase 1; dashboard/briefings/voice in Phase 7.
  */
 import type { Query, Verdict } from '../types.js';
-import { notImplemented } from '../util/not-implemented.js';
+import type { Orchestrator } from '../layer2-investigation-core/index.js';
 
 /** A turn submitted by the user through any interface surface. */
 export interface ChatTurn {
@@ -24,9 +24,9 @@ export interface InterfacePort {
   ask(turn: ChatTurn): Promise<Verdict>;
 }
 
-/** Phase 0 placeholder — wired to the Orchestrator in Phase 1. */
-export function createInterfacePort(): InterfacePort {
+/** Wrap an Orchestrator as the interface boundary the API/CLI talk to. */
+export function createInterfacePort(orchestrator: Orchestrator): InterfacePort {
   return {
-    ask: () => notImplemented('Layer I InterfacePort.ask'),
+    ask: (turn) => orchestrator.investigate(turn.query),
   };
 }

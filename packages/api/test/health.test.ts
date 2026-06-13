@@ -11,6 +11,7 @@ describe('api /health', () => {
       nodeEnv: 'test',
       apiPort: 0,
       webOrigin: 'http://localhost:5173',
+      defaultModel: 'claude-opus-4-8',
     });
   });
 
@@ -21,6 +22,11 @@ describe('api /health', () => {
   it('returns ok status', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ status: 'ok', service: 'feluda-api', phase: 0 });
+    expect(res.json()).toMatchObject({
+      status: 'ok',
+      service: 'feluda-api',
+      phase: 1,
+      modelMode: 'offline-stub',
+    });
   });
 });

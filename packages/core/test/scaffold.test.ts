@@ -17,7 +17,7 @@ import {
  */
 describe('core scaffold', () => {
   it('exposes a version marker', () => {
-    expect(FELUDA_CORE_VERSION).toBe('0.0.0');
+    expect(FELUDA_CORE_VERSION).toBe('0.1.0');
   });
 
   it('exports all 7 layer namespaces', () => {
@@ -30,8 +30,16 @@ describe('core scaffold', () => {
     expect(Ethics.createEthicsGate).toBeTypeOf('function');
   });
 
-  it('placeholders throw NotImplementedError until their phase lands', () => {
+  it('Phase 1 layers are implemented (ethics screens, not a stub)', () => {
     const gate = Ethics.createEthicsGate();
-    expect(() => gate.screenRequest('hello')).toThrow(NotImplementedError);
+    expect(gate.screenRequest('what is the capital of France?').allowed).toBe(true);
+  });
+
+  it('not-yet-built layers still throw NotImplementedError', () => {
+    // Layer IV (Evidence) lands in Phase 2.
+    const evidence = Evidence.createEvidencePort();
+    expect(() => evidence.gather({ id: 'q', text: 'x', receivedAt: '' })).toThrow(
+      NotImplementedError,
+    );
   });
 });

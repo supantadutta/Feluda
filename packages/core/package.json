@@ -16,6 +16,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1"
+  },
   "devDependencies": {
     "typescript": "^5.5.0"
   }

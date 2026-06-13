@@ -6,10 +6,12 @@
  * a synthesizer judge step, specialist routing, and a cost cap with single-model
  * fallback.
  *
- * Phase: implemented in Phase 4. The Model Gateway interface is defined now so
- * Phase 1 can depend on a single-provider implementation behind it.
+ * Phase: panel/synthesis land in Phase 4. The Model Gateway interface and a
+ * single-provider implementation (Anthropic, with an offline stub fallback)
+ * ship in Phase 1 so the Investigation Core has a brain to talk to.
  */
-import { notImplemented } from '../util/not-implemented.js';
+import { StubGateway } from './providers/stub.js';
+import { AnthropicGateway } from './providers/anthropic.js';
 
 /** A normalized request to any model provider. */
 export interface ModelRequest {
@@ -42,9 +44,26 @@ export interface ModelGateway {
   panel?(req: ModelRequest): Promise<ModelResponse[]>;
 }
 
-/** Phase 0 placeholder — a real Anthropic adapter lands in Phase 1. */
-export function createModelGateway(): ModelGateway {
-  return {
-    complete: () => notImplemented('Layer III ModelGateway.complete'),
-  };
+export { StubGateway } from './providers/stub.js';
+export { AnthropicGateway, type AnthropicGatewayConfig } from './providers/anthropic.js';
+
+export interface GatewayConfig {
+  /** Anthropic API key. When absent, the offline stub is used. */
+  apiKey?: string;
+  /** Default model id. */
+  model?: string;
+}
+
+/**
+ * Build the default gateway: Anthropic when an API key is provided, otherwise
+ * an offline stub so the loop runs without secrets or network.
+ */
+export function createModelGateway(config: GatewayConfig = {}): ModelGateway {
+  if (config.apiKey) {
+    return new AnthropicGateway({
+      apiKey: config.apiKey,
+      model: config.model ?? 'claude-opus-4-8',
+    });
+  }
+  return new StubGateway();
 }

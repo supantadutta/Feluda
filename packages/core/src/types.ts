@@ -31,6 +31,9 @@ export interface Evidence {
   relevance: number;
 }
 
+/** The non-negotiable hard boundaries (CLAUDE.md / Layer VII). */
+export type Boundary = 'lawful-use' | 'defensive-only' | 'weapon-cbrn';
+
 /** Provenance for a fact — the Citation Trail (Layer IV). */
 export interface Citation {
   /** Canonical URL or document reference. */
@@ -87,6 +90,15 @@ export interface Verdict {
   citations: Citation[];
   /** Hypotheses considered, with final belief, for transparency. */
   hypotheses: Hypothesis[];
+  /**
+   * Set when the request (or a generated answer) was blocked by the Ethics
+   * layer. The answer then states the refusal and proposes a lawful path.
+   */
+  refusal?: {
+    boundary: Boundary;
+    reason: string;
+    lawfulAlternative: string;
+  };
 }
 
 /** A single structured audit-log entry (Layer VII — Audit & Approval). */

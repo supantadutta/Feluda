@@ -17,4 +17,4 @@ export * as Action from './layer6-action/index.js';
 export * as Ethics from './layer7-ethics/index.js';
 
 /** Build/identity marker — handy for the API health check. */
-export const FELUDA_CORE_VERSION = '0.0.0';
+export const FELUDA_CORE_VERSION = '0.1.0';

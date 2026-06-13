@@ -14,10 +14,15 @@ import type {
   Evidence,
   Hypothesis,
   Query,
+  ReasoningStep,
   ReasoningTrace,
   Verdict,
 } from '../types.js';
-import { notImplemented } from '../util/not-implemented.js';
+import type { ModelGateway } from '../layer3-council/index.js';
+import type { EthicsGate, AuditLog } from '../layer7-ethics/index.js';
+import { createModelGateway } from '../layer3-council/index.js';
+import { createEthicsGate, InMemoryAuditLog } from '../layer7-ethics/index.js';
+import { DeductionOrchestrator } from './orchestrator.js';
 
 /** Generates competing explanations (abductive reasoning). */
 export interface HypothesisEngine {
@@ -37,6 +42,8 @@ export interface ConfidenceCalibrator {
 /** Records the auditable chain from clue → verdict. */
 export interface ReasoningTracer {
   start(query: Query): ReasoningTrace;
+  record(stage: ReasoningStep['stage'], summary: string, refs?: string[]): void;
+  trace(): ReasoningTrace;
 }
 
 /** The orchestrator: plan → act → verify loop over the whole deduction loop. */
@@ -44,9 +51,28 @@ export interface Orchestrator {
   investigate(query: Query): Promise<Verdict>;
 }
 
-/** Phase 0 placeholder — wired up in Phase 1. */
-export function createOrchestrator(): Orchestrator {
-  return {
-    investigate: () => notImplemented('Layer II Orchestrator.investigate'),
-  };
+export { DeductionOrchestrator, type OrchestratorDeps } from './orchestrator.js';
+export { ArrayReasoningTracer } from './tracer.js';
+export { BandConfidenceCalibrator } from './confidence.js';
+export { LlmHypothesisEngine } from './hypothesis-engine.js';
+export { NormalizingEvidenceWeigher } from './weigher.js';
+export { LlmSynthesizer } from './synthesizer.js';
+
+export interface CreateOrchestratorConfig {
+  gateway?: ModelGateway;
+  ethics?: EthicsGate;
+  audit?: AuditLog;
+}
+
+/**
+ * Build the deduction-loop orchestrator. Defaults wire an offline-capable
+ * gateway, the rule-based Ethics gate, and an in-memory audit log; the API
+ * server overrides these with a live Anthropic gateway and a file audit log.
+ */
+export function createOrchestrator(config: CreateOrchestratorConfig = {}): Orchestrator {
+  return new DeductionOrchestrator({
+    gateway: config.gateway ?? createModelGateway(),
+    ethics: config.ethics ?? createEthicsGate(),
+    audit: config.audit ?? new InMemoryAuditLog(),
+  });
 }

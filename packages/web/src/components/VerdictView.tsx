@@ -1,0 +1,88 @@
+import type { Verdict } from '@feluda/core';
+import { ConfidenceBadge } from './ConfidenceBadge.js';
+
+const STAGE_LABEL: Record<string, string> = {
+  gather: 'Gather evidence',
+  hypothesize: 'Form hypotheses',
+  'cross-examine': 'Cross-examine',
+  weigh: 'Weigh & test',
+  verdict: 'Verdict',
+};
+
+/** Renders a transparent verdict: answer, confidence, reasoning trace, hypotheses. */
+export function VerdictView({ verdict }: { verdict: Verdict }): JSX.Element {
+  if (verdict.refusal) {
+    return (
+      <div className="rounded-lg border border-rose-800/60 bg-rose-950/40 p-4 space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-rose-300">
+          Refused · {verdict.refusal.boundary}
+        </div>
+        <p className="text-slate-200 whitespace-pre-wrap">{verdict.answer}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-slate-100 whitespace-pre-wrap">{verdict.answer}</p>
+        <ConfidenceBadge confidence={verdict.confidence} />
+      </div>
+
+      {verdict.confidence.gaps.length > 0 && (
+        <div className="text-xs text-slate-400">
+          <span className="font-semibold text-slate-300">Gaps:</span>{' '}
+          {verdict.confidence.gaps.join(' · ')}
+        </div>
+      )}
+
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-sky-300 hover:text-sky-200">
+          Reasoning trace ({verdict.trace.length} steps)
+        </summary>
+        <ol className="mt-2 space-y-1.5 border-l border-slate-700 pl-4">
+          {verdict.trace.map((step, i) => (
+            <li key={i} className="text-sm text-slate-300">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {STAGE_LABEL[step.stage] ?? step.stage}
+              </span>
+              <div>{step.summary}</div>
+            </li>
+          ))}
+        </ol>
+      </details>
+
+      {verdict.hypotheses.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-sky-300 hover:text-sky-200">
+            Hypotheses considered ({verdict.hypotheses.length})
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {verdict.hypotheses.map((h) => (
+              <li key={h.id} className="text-sm">
+                <div className="flex items-center justify-between gap-2 text-slate-300">
+                  <span>{h.statement}</span>
+                  <span className="tabular-nums text-slate-500">
+                    {(h.belief * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 rounded bg-slate-700">
+                  <div
+                    className="h-1.5 rounded bg-sky-500"
+                    style={{ width: `${Math.round(h.belief * 100)}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <div className="text-xs text-slate-500">
+        {verdict.citations.length === 0
+          ? 'No external citations — Phase 1 reasons over the question and general knowledge.'
+          : `${verdict.citations.length} citation(s).`}
+      </div>
+    </div>
+  );
+}

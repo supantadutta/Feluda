@@ -9,14 +9,14 @@
  * instruction. This is the only layer whose *contract* is fixed in Phase 0 (so
  * other layers can depend on it from day one); its logic lands in Phase 1.
  */
-import type { AuditEntry } from '../types.js';
-import { notImplemented } from '../util/not-implemented.js';
+import type { AuditEntry, Boundary } from '../types.js';
+import { RuleBasedEthicsGate } from './gate.js';
 
 /** Outcome of evaluating a request/response against the boundaries. */
 export interface GateDecision {
   allowed: boolean;
   /** Which boundary triggered, if blocked. */
-  boundary?: 'lawful-use' | 'defensive-only' | 'weapon-cbrn';
+  boundary?: Boundary;
   /** Why it was blocked, in plain language. */
   reason?: string;
   /** A lawful alternative to propose to the user (CLAUDE.md requirement). */
@@ -41,10 +41,10 @@ export interface ApprovalGate {
   requiresApproval(actionKind: string): boolean;
 }
 
-/** Phase 0 placeholder — boundary logic + tests land in Phase 1. */
+export { RuleBasedEthicsGate } from './gate.js';
+export { InMemoryAuditLog, FileAuditLog, auditEntry } from './audit.js';
+
+/** The default Ethics gate — rule-based screening of requests and responses. */
 export function createEthicsGate(): EthicsGate {
-  return {
-    screenRequest: () => notImplemented('Layer VII EthicsGate.screenRequest'),
-    screenResponse: () => notImplemented('Layer VII EthicsGate.screenResponse'),
-  };
+  return new RuleBasedEthicsGate();
 }

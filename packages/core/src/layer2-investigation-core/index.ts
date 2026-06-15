@@ -55,10 +55,13 @@ export interface Orchestrator {
 
 export { DeductionOrchestrator, type OrchestratorDeps } from './orchestrator.js';
 export { ArrayReasoningTracer } from './tracer.js';
-export { BandConfidenceCalibrator } from './confidence.js';
+export { BandConfidenceCalibrator, type CalibrateOptions } from './confidence.js';
 export { LlmHypothesisEngine } from './hypothesis-engine.js';
 export { NormalizingEvidenceWeigher } from './weigher.js';
+export { BayesianEvidenceWeigher, dominance } from './bayes.js';
 export { LlmSynthesizer } from './synthesizer.js';
+export { InvestigationPlanner, type InvestigationPlan, type InvestigationMode } from './planner.js';
+export { DiscriminatingQuestioner } from './followup.js';
 
 export interface CreateOrchestratorConfig {
   gateway?: ModelGateway;

@@ -19,6 +19,8 @@ function bandFor(score: number): Confidence['band'] {
 
 const SINGLE_SOURCE_GAP =
   'Claims are not independently corroborated (fewer than two credible, independent sources).';
+const CLOSE_HYPOTHESES_GAP =
+  'Competing hypotheses remain close — the leading explanation does not clearly dominate.';
 
 export interface CalibrateOptions {
   /** A confidence score the model proposed for its own answer. */
@@ -27,6 +29,8 @@ export interface CalibrateOptions {
   extraGaps?: string[];
   /** Whether ≥2 independent credible sources corroborate the evidence. */
   corroborated?: boolean;
+  /** Belief gap between the leading hypothesis and the runner-up (0..1). */
+  separation?: number;
 }
 
 export class BandConfidenceCalibrator implements ConfidenceCalibrator {
@@ -43,6 +47,12 @@ export class BandConfidenceCalibrator implements ConfidenceCalibrator {
       // Evidence exists but stands on a single source — still cap below "high".
       score = Math.min(score, 0.69);
       gaps.add(SINGLE_SOURCE_GAP);
+    }
+
+    // A near-tie between hypotheses is itself a reason for humility.
+    if (hypotheses.length >= 2 && opts.separation !== undefined && opts.separation < 0.1) {
+      score = Math.min(score, 0.6);
+      gaps.add(CLOSE_HYPOTHESES_GAP);
     }
 
     return { score, band: bandFor(score), gaps: [...gaps] };

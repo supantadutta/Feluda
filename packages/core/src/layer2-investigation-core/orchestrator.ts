@@ -1,26 +1,30 @@
 /**
- * Orchestrator (Layer II) — runs the deduction loop and is the single entry
- * point the Interface layer calls.
+ * Orchestrator (Layer II) — runs the *iterative* deduction loop and is the
+ * single entry point the Interface layer calls.
  *
- *   screen → gather → hypothesize → weigh → synthesize → calibrate → screen
+ *   screen → plan → [ gather → weigh(Bayesian) → check convergence → ask a
+ *   discriminating follow-up ]·rounds → synthesize → calibrate → screen
  *
- * Phase 1 has no Evidence (IV) or Memory (V) layers, so "gather" is a noted
- * short-circuit. Every turn is screened by Ethics (VII) on the way in and out,
- * and recorded to the audit log.
+ * The planner decides depth: simple questions short-circuit to one round; deep
+ * questions iterate, gathering targeted evidence until a hypothesis dominates or
+ * the round budget is spent. Beliefs are updated with a Bayesian weigher; the
+ * trace records every round so the reasoning is auditable. Ethics (VII) screens
+ * in and out; every turn is audited.
  */
-import type { Citation, Evidence, Query, Verdict } from '../types.js';
+import type { Citation, Evidence, Query, Verdict, CouncilReport, ReviewFlag, InvestigationSummary } from '../types.js';
 import type { ModelGateway, Council } from '../layer3-council/index.js';
-import type { CouncilReport } from '../types.js';
-import type { EvidencePort, GatheredEvidence } from '../layer4-evidence/index.js';
+import type { EvidencePort } from '../layer4-evidence/index.js';
+import { hostOf } from '../layer4-evidence/index.js';
 import type { MemoryPort, MemoryItem, FeedbackStore, PatternLibrary, SelfReview } from '../layer5-memory/index.js';
-import type { ReviewFlag } from '../types.js';
 import type { EthicsGate, AuditLog, GateDecision } from '../layer7-ethics/index.js';
 import { auditEntry } from '../layer7-ethics/audit.js';
 import { ArrayReasoningTracer } from './tracer.js';
 import { BandConfidenceCalibrator } from './confidence.js';
 import { LlmHypothesisEngine } from './hypothesis-engine.js';
-import { NormalizingEvidenceWeigher } from './weigher.js';
+import { BayesianEvidenceWeigher, dominance } from './bayes.js';
 import { LlmSynthesizer } from './synthesizer.js';
+import { InvestigationPlanner } from './planner.js';
+import { DiscriminatingQuestioner } from './followup.js';
 import type { Orchestrator } from './index.js';
 
 export interface OrchestratorDeps {
@@ -41,14 +45,18 @@ export interface OrchestratorDeps {
   selfReview?: SelfReview;
 }
 
+const evidenceKey = (e: Evidence): string => `${e.citation.source}|${e.claim}`;
+
 export class DeductionOrchestrator implements Orchestrator {
-  private readonly hypotheses: LlmHypothesisEngine;
-  private readonly weigher = new NormalizingEvidenceWeigher();
+  private readonly hypothesisEngine: LlmHypothesisEngine;
+  private readonly weigher = new BayesianEvidenceWeigher();
   private readonly calibrator = new BandConfidenceCalibrator();
   private readonly synthesizer: LlmSynthesizer;
+  private readonly planner = new InvestigationPlanner();
+  private readonly questioner = new DiscriminatingQuestioner();
 
   constructor(private readonly deps: OrchestratorDeps) {
-    this.hypotheses = new LlmHypothesisEngine(deps.gateway);
+    this.hypothesisEngine = new LlmHypothesisEngine(deps.gateway);
     this.synthesizer = new LlmSynthesizer(deps.gateway);
   }
 
@@ -68,46 +76,91 @@ export class DeductionOrchestrator implements Orchestrator {
       return this.refusal(query, inbound, tracer);
     }
 
-    // ── Recall prior notes & cases (Layer V, when wired) ──
+    // ── Plan investigation depth ──
+    const plan = this.planner.plan(query);
+
+    // ── Recall prior notes & cases (Layer V) ──
     let recalled: MemoryItem[] = [];
     if (this.deps.memory) {
       recalled = await this.deps.memory.recall(query.text, 4);
-      if (recalled.length > 0) {
-        tracer.record('gather', `Recalled ${recalled.length} relevant item(s) from memory.`);
-      }
+      if (recalled.length > 0) tracer.record('gather', `Recalled ${recalled.length} relevant item(s) from memory.`);
     }
     const memoryContext = recalled.map((m) => m.text);
 
     // ── Adaptive learning (Layer V): honour corrections, apply playbooks ──
     const preferences = this.deps.feedback?.relevant(query.text, 3).map((p) => p.text) ?? [];
-    if (preferences.length > 0) {
-      tracer.record('gather', `Honouring ${preferences.length} user preference(s) from feedback.`);
-    }
+    if (preferences.length > 0) tracer.record('gather', `Honouring ${preferences.length} user preference(s).`);
     const playbook = this.deps.patterns?.match(query.text);
-    if (playbook) {
-      tracer.record('hypothesize', `Applied playbook "${playbook.caseType}" (reusing a prior reasoning template).`);
-    }
+    if (playbook) tracer.record('hypothesize', `Applied playbook "${playbook.caseType}".`);
 
-    // ── Gather evidence (Layer IV, when wired) ──
-    let gathered: GatheredEvidence | undefined;
+    // ── Round 1: gather, hypothesise, weigh ──
+    let evidence: Evidence[] = [];
+    let offline = false;
     if (this.deps.evidence) {
-      gathered = await this.deps.evidence.gather(query);
-      const { evidence, corroboration, offline } = gathered;
+      const g = await this.deps.evidence.gather(query);
+      offline = g.offline;
+      evidence = g.evidence;
+      const c = this.corroboration(evidence);
       tracer.record(
         'gather',
-        `Gathered ${evidence.length} source(s)${offline ? ' (offline fixtures)' : ''}; ` +
-          `${corroboration.independentSources} independent host(s); ` +
-          `${corroboration.corroborated ? 'corroborated' : 'NOT independently corroborated'}.`,
+        `Round 1: gathered ${evidence.length} source(s)${offline ? ' (offline fixtures)' : ''}; ` +
+          `${c.independentSources} independent host(s).`,
       );
     } else {
-      tracer.record(
-        'gather',
-        'No evidence layer wired: reasoning over the question and general knowledge; no external citations.',
-      );
+      tracer.record('gather', 'No evidence layer wired: reasoning over the question and general knowledge.');
     }
-    const evidence: Evidence[] = gathered?.evidence ?? [];
 
-    // ── Self-Review (Layer V): does new evidence contradict a prior verdict? ──
+    const hypotheses = await this.hypothesisEngine.generate(query, evidence, memoryContext, {
+      seedHypotheses: playbook?.seedHypotheses,
+    });
+    tracer.record(
+      'hypothesize',
+      `Formed ${hypotheses.length} competing hypotheses. Plan: ${plan.mode} (≤${plan.maxRounds} round(s)).`,
+      hypotheses.map((h) => h.id),
+    );
+
+    let weighed = await this.weigher.weigh(hypotheses, evidence);
+    let dom = dominance(weighed);
+    tracer.record('weigh', `Round 1 beliefs: ${this.beliefSummary(weighed)} (separation ${dom.separation.toFixed(2)}).`);
+
+    // ── Iterative rounds: targeted follow-ups until convergence or budget ──
+    let round = 1;
+    let stopReason = !this.deps.evidence
+      ? 'no evidence layer wired'
+      : dom.topBelief >= plan.confidenceTarget && dom.separation >= plan.separationTarget
+        ? 'a hypothesis dominates'
+        : 'single round (shallow plan)';
+
+    while (
+      this.deps.evidence &&
+      round < plan.maxRounds &&
+      !(dom.topBelief >= plan.confidenceTarget && dom.separation >= plan.separationTarget)
+    ) {
+      round++;
+      const followup = this.questioner.next(query, weighed);
+      tracer.record('cross-examine', `Round ${round}: follow-up — ${followup}`);
+      const g = await this.deps.evidence.gather({ ...query, id: `${query.id}#r${round}`, text: followup });
+
+      const seen = new Set(evidence.map(evidenceKey));
+      const fresh = g.evidence.filter((e) => !seen.has(evidenceKey(e)));
+      if (fresh.length === 0) {
+        stopReason = 'no new evidence';
+        tracer.record('weigh', `Round ${round}: no new evidence; stopping.`);
+        break;
+      }
+      evidence = [...evidence, ...fresh];
+      weighed = await this.weigher.weigh(hypotheses, evidence);
+      dom = dominance(weighed);
+      tracer.record('weigh', `Round ${round} beliefs: ${this.beliefSummary(weighed)} (separation ${dom.separation.toFixed(2)}).`);
+      if (dom.topBelief >= plan.confidenceTarget && dom.separation >= plan.separationTarget) {
+        stopReason = 'a hypothesis dominates';
+      } else if (round >= plan.maxRounds) {
+        stopReason = 'reached round budget';
+      }
+    }
+    const converged = dom.topBelief >= plan.confidenceTarget && dom.separation >= plan.separationTarget;
+
+    // ── Self-Review (Layer V): does the evidence contradict a prior verdict? ──
     const reviewFlags: ReviewFlag[] = [];
     if (this.deps.selfReview && evidence.length > 0) {
       const seen = new Set<string>();
@@ -123,24 +176,6 @@ export class DeductionOrchestrator implements Orchestrator {
         tracer.record('weigh', `Flagged ${reviewFlags.length} prior verdict(s) for re-review (belief revision).`);
       }
     }
-
-    // ── Hypothesise → weigh ──
-    const hypotheses = await this.hypotheses.generate(query, evidence, memoryContext, {
-      seedHypotheses: playbook?.seedHypotheses,
-    });
-    tracer.record(
-      'hypothesize',
-      `Formed ${hypotheses.length} competing hypotheses.`,
-      hypotheses.map((h) => h.id),
-    );
-    const weighed = await this.weigher.weigh(hypotheses, evidence);
-    tracer.record(
-      'weigh',
-      evidence.length > 0
-        ? 'Weighed hypotheses against the gathered evidence.'
-        : 'Normalised hypothesis priors (no external evidence to update on yet).',
-      weighed.map((h) => h.id),
-    );
 
     // ── Synthesise the verdict (optionally cross-examined by the Council) ──
     let synth;
@@ -162,10 +197,12 @@ export class DeductionOrchestrator implements Orchestrator {
     }
     for (const step of synth.reasoning) tracer.record('weigh', step);
 
+    const corr = this.corroboration(evidence);
     const confidence = this.calibrator.calibrate(weighed, evidence, {
       modelScore: synth.modelScore,
       extraGaps: synth.gaps,
-      corroborated: gathered?.corroboration.corroborated,
+      corroborated: this.deps.evidence ? corr.corroborated : undefined,
+      separation: weighed.length >= 2 ? dom.separation : undefined,
     });
     tracer.record('verdict', synth.answer || '(no answer produced)');
 
@@ -179,6 +216,7 @@ export class DeductionOrchestrator implements Orchestrator {
       return this.refusal(query, outbound, tracer);
     }
 
+    const investigation: InvestigationSummary = { mode: plan.mode, rounds: round, converged, stopReason };
     audit.record(
       auditEntry('verdict.produced', {
         queryId: query.id,
@@ -186,6 +224,7 @@ export class DeductionOrchestrator implements Orchestrator {
         score: confidence.score,
         hypotheses: weighed.length,
         sources: citations.length,
+        rounds: round,
       }),
     );
 
@@ -199,14 +238,22 @@ export class DeductionOrchestrator implements Orchestrator {
       evidence: evidence.length > 0 ? evidence : undefined,
       council: councilReport,
       reviewFlags: reviewFlags.length > 0 ? reviewFlags : undefined,
+      investigation,
     };
 
-    // ── Write the finished case back to Memory (Layer V) ──
-    if (this.deps.memory?.rememberCase) {
-      await this.deps.memory.rememberCase(query, verdict);
-    }
-
+    if (this.deps.memory?.rememberCase) await this.deps.memory.rememberCase(query, verdict);
     return verdict;
+  }
+
+  /** Distinct credible hosts → corroboration over the accumulated evidence. */
+  private corroboration(evidence: Evidence[]): { independentSources: number; corroborated: boolean } {
+    const hosts = new Set(evidence.filter((e) => e.credibility >= 0.5).map((e) => hostOf(e.citation.source)));
+    return { independentSources: hosts.size, corroborated: hosts.size >= 2 };
+  }
+
+  private beliefSummary(hypotheses: { statement: string; belief: number }[]): string {
+    const top = [...hypotheses].sort((a, b) => b.belief - a.belief)[0];
+    return top ? `“${top.statement.slice(0, 48)}” ${(top.belief * 100).toFixed(0)}%` : '(none)';
   }
 
   /** Build a transparent refusal verdict carrying the lawful alternative. */

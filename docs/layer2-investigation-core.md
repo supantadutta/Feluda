@@ -3,7 +3,40 @@
 The brain. Runs the deduction loop and is the single entry point the Interface
 layer (I) calls via `Orchestrator.investigate(query)`.
 
-## The loop (Phase 1)
+## The iterative loop
+
+```
+screen → plan → [ gather → weigh(Bayesian) → converged? → discriminating follow-up ]·rounds
+       → synthesize → calibrate → screen
+```
+
+A real investigator iterates. The **InvestigationPlanner** sets depth from the
+question (simple/factual → one round; causal/complex/multi-part → up to 3). Each
+round gathers evidence, the **BayesianEvidenceWeigher** updates beliefs
+(`posterior ∝ prior · ∏ likelihood`), and the loop checks whether a hypothesis
+**dominates** (belief ≥ target *and* leads the runner-up by a margin). If not,
+the **DiscriminatingQuestioner** asks the question that best separates the two
+leading hypotheses, and the next round gathers targeted evidence. The loop stops
+on convergence, an exhausted round budget, or when no new evidence arrives — the
+`Verdict.investigation` summary records which.
+
+### Bayesian belief updating
+
+Likelihood comes from each evidence item's **stance** toward a hypothesis:
+topical similarity combined with per-term affirmation/negation and antonyms, so
+"forged, not authentic" supports *forged* and contradicts *authentic* — not
+both. Only each hypothesis's **distinctive** terms count, so boilerplate shared
+by rival hypotheses cannot sway belief. Neutral evidence carries baseline
+likelihood 0.5. Supporting/contradicting evidence ids are recorded on each
+hypothesis for the trace.
+
+### Confidence reflects dominance
+
+The calibrator caps confidence below "high" without corroboration, and also when
+the leading hypotheses remain **close** (low separation) — a near-tie is itself a
+reason for humility.
+
+## The original single-pass description
 
 ```
 screen(request) → gather → hypothesize → weigh → synthesize → calibrate → screen(response)

@@ -98,6 +98,8 @@ export interface Verdict {
   council?: CouncilReport;
   /** Prior verdicts this investigation's evidence appears to contradict (Layer V). */
   reviewFlags?: ReviewFlag[];
+  /** How the agentic deduction loop ran (rounds, convergence). */
+  investigation?: InvestigationSummary;
   /**
    * Set when the request (or a generated answer) was blocked by the Ethics
    * layer. The answer then states the refusal and proposes a lawful path.
@@ -107,6 +109,17 @@ export interface Verdict {
     reason: string;
     lawfulAlternative: string;
   };
+}
+
+/** A summary of how the iterative deduction loop ran (Layer II). */
+export interface InvestigationSummary {
+  mode: 'shallow' | 'deep';
+  /** Evidence-gathering rounds actually run. */
+  rounds: number;
+  /** Whether a leading hypothesis dominated within the round budget. */
+  converged: boolean;
+  /** Why the loop stopped (e.g. "a hypothesis dominates", "reached round budget"). */
+  stopReason: string;
 }
 
 /** A prior verdict flagged for re-review because new evidence contradicts it. */

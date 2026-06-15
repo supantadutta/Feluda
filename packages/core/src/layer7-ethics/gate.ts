@@ -39,6 +39,13 @@ const OFFENSIVE_CYBER_RULES: Rule[] = [
     pattern:
       /\b(ddos|denial[- ]of[- ]service attack|credential stuffing|phishing kit|sql injection payload|bypass (?:the )?(?:authentication|auth|login|2fa|mfa|paywall)|crack (?:the |a |his |her |their )?password)\b/i,
   },
+  {
+    // Intrusive/offensive OSINT-adjacent actions. Defensive scanning of one's
+    // OWN assets is allowed (bare "scan my server" does not match).
+    boundary: 'defensive-only',
+    pattern:
+      /\b(nmap|masscan|sqlmap|metasploit|\bhydra\b|brute[- ]?forc\w*|password[- ]?spray\w*|gain unauthori[sz]ed access|break into|hack into|exploit (?:the |this |that )?(?:target|server|site|host|machine|network|system)|scan\b[^.?!]{0,40}\bwithout (?:permission|authori[sz]ation|consent))\b/i,
+  },
 ];
 
 /** Stalking / surveillance / doxxing / private-data digging on individuals. */
@@ -47,6 +54,12 @@ const LAWFUL_USE_RULES: Rule[] = [
     boundary: 'lawful-use',
     pattern:
       /\b(stalk|surveil|spy on|doxx?|track (?:down )?(?:someone|a person|my ex|her|him|this person)|find out where (?:\w+ )?lives|home address of|hack (?:into )?(?:his|her|their|someone'?s|somebody'?s) (?:account|email|phone|instagram|facebook|whatsapp)|read (?:his|her|their|someone'?s) (?:private|dm|messages)|(?:social security number|ssn|passport number) of)\b/i,
+  },
+  {
+    // OSINT misuse: deanonymisation / doxxing / personal tracking of individuals.
+    boundary: 'lawful-use',
+    pattern:
+      /\b(de-?anonymi[sz]e|unmask (?:the )?(?:person|user|identity|account|owner)|real (?:name|identity) (?:behind|of) (?:this |the )?(?:username|handle|account|profile|email)|build (?:a |me )?(?:dossier|profile) on (?:this|a|the) (?:person|individual|private)|find (?:the |their )?(?:home |personal )?(?:address|phone number|physical location) of (?:this|a|the|someone)|breach (?:data|database|dump)[^.?!]{0,30}\b(?:password|personal|private|identity))\b/i,
   },
 ];
 

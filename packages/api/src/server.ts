@@ -9,6 +9,7 @@ import {
   Memory,
   Action,
   Ethics,
+  Osint,
   type Verdict,
 } from '@feluda/core';
 // `Council` namespace exposes both the gateway factory and createCouncil.
@@ -81,6 +82,10 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   // Action layer (VI). Consequential actions are blocked until confirmed.
   const action = Action.createActionPort();
 
+  // OSINT engine — lawful, passive, public-source (offline fixtures by default).
+  const osint = new Osint.OsintEngine();
+  const ethics = Ethics.createEthicsGate();
+
   // Briefings (Layer I): scheduled digests. Runs an investigation per topic.
   const recentDigests: InterfaceLayer.BriefingDigest[] = [];
   const briefings = new InterfaceLayer.BriefingScheduler((topic) =>
@@ -141,6 +146,29 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     const q = req.query.q;
     if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
     return { items: await memory.recall(q, 5) };
+  });
+
+  // OSINT (Layer IV): passive, public-source investigation of an indicator.
+  app.post<{ Body: { target?: unknown; type?: unknown } }>('/api/osint/investigate', async (req, reply) => {
+    const { target, type } = req.body ?? {};
+    if (typeof target !== 'string' || target.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "target" string is required.' });
+    }
+    // Screen the request — block doxxing/deanonymisation/intrusive misuse.
+    const screen = ethics.screenRequest(target);
+    audit.record(Ethics.auditEntry('osint.screened', { allowed: screen.allowed, boundary: screen.boundary }));
+    if (!screen.allowed) {
+      return reply.code(403).send({ refusal: { boundary: screen.boundary, reason: screen.reason, lawfulAlternative: screen.lawfulAlternative } });
+    }
+    const result = await osint.investigate(target.trim(), typeof type === 'string' ? (type as Osint.OsintTargetType) : undefined);
+    return result;
+  });
+
+  // Entity extraction (Layer IV): pull technical indicators from text.
+  app.post<{ Body: { text?: unknown } }>('/api/osint/extract-entities', async (req, reply) => {
+    const { text } = req.body ?? {};
+    if (typeof text !== 'string') return reply.code(400).send({ error: 'A "text" string is required.' });
+    return { entities: Osint.extractEntities(text) };
   });
 
   // Briefings (Layer I): schedule, list, and run digests.

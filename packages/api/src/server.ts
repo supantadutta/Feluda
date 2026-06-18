@@ -10,6 +10,8 @@ import {
   Action,
   Ethics,
   Osint,
+  Cases,
+  Soc,
   type Verdict,
 } from '@feluda/core';
 // `Council` namespace exposes both the gateway factory and createCouncil.
@@ -86,6 +88,11 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   const osint = new Osint.OsintEngine();
   const ethics = Ethics.createEthicsGate();
 
+  // Investigation cases, SOC analyzer, and the professional report generator.
+  const cases = new Cases.CaseManager();
+  const socAnalyzer = new Soc.SocAnalyzer();
+  const caseReports = new Cases.CaseReportBuilder();
+
   // Briefings (Layer I): scheduled digests. Runs an investigation per topic.
   const recentDigests: InterfaceLayer.BriefingDigest[] = [];
   const briefings = new InterfaceLayer.BriefingScheduler((topic) =>
@@ -146,6 +153,99 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     const q = req.query.q;
     if (!q) return reply.code(400).send({ error: 'Query param "q" is required.' });
     return { items: await memory.recall(q, 5) };
+  });
+
+  // ── Investigation Case System (Layer II) ──
+  app.post<{ Body: { title?: unknown; objective?: unknown; scope?: unknown } }>('/api/cases', async (req, reply) => {
+    const { title, objective, scope } = req.body ?? {};
+    if (typeof title !== 'string' || title.trim().length === 0) {
+      return reply.code(400).send({ error: 'A non-empty "title" string is required.' });
+    }
+    return {
+      case: cases.create({
+        title: title.trim(),
+        objective: typeof objective === 'string' ? objective : undefined,
+        scope: typeof scope === 'string' ? scope : undefined,
+      }),
+    };
+  });
+
+  app.get('/api/cases', async () => ({ cases: cases.list() }));
+
+  app.get<{ Params: { id: string } }>('/api/cases/:id', async (req, reply) => {
+    const c = cases.get(req.params.id);
+    return c ? { case: c } : reply.code(404).send({ error: 'No such case.' });
+  });
+
+  app.post<{ Params: { id: string }; Body: { evidence?: { claim?: unknown; source?: unknown }[] } }>(
+    '/api/cases/:id/evidence',
+    async (req, reply) => {
+      const items = Array.isArray(req.body?.evidence) ? req.body!.evidence : [];
+      const evidence = items
+        .filter((e) => typeof e?.claim === 'string' && typeof e?.source === 'string')
+        .map((e) => ({
+          id: `ev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          claim: String(e.claim),
+          citation: { source: String(e.source), retrievedAt: new Date().toISOString() },
+          credibility: 0.6,
+          relevance: 0.6,
+          flags: ['user-document'],
+        }));
+      const c = cases.addEvidence(req.params.id, evidence);
+      return c ? { case: c } : reply.code(404).send({ error: 'No such case.' });
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { question?: unknown } }>(
+    '/api/cases/:id/investigate',
+    async (req, reply) => {
+      const c = cases.get(req.params.id);
+      if (!c) return reply.code(404).send({ error: 'No such case.' });
+      const question = req.body?.question;
+      if (typeof question !== 'string' || question.trim().length === 0) {
+        return reply.code(400).send({ error: 'A non-empty "question" string is required.' });
+      }
+      const verdict = await orchestrator.investigate({
+        id: `q_${Date.now().toString(36)}`,
+        text: question.trim(),
+        caseId: c.id,
+        receivedAt: new Date().toISOString(),
+      });
+      const updated = cases.applyVerdict(c.id, question.trim(), verdict);
+      return { case: updated, verdict };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/api/cases/:id/timeline', async (req, reply) => {
+    const c = cases.get(req.params.id);
+    return c ? { timeline: c.timeline } : reply.code(404).send({ error: 'No such case.' });
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { type?: string } }>(
+    '/api/cases/:id/report',
+    async (req, reply) => {
+      const c = cases.get(req.params.id);
+      if (!c) return reply.code(404).send({ error: 'No such case.' });
+      const type = (req.query.type ?? 'osint_case') as Cases.CaseReportType;
+      const report = caseReports.build(c, type);
+      cases.setReport(c.id, report.content);
+      return { report };
+    },
+  );
+
+  // ── Defensive SOC investigation (Layer VI) ──
+  app.post<{ Body: Record<string, unknown> }>('/api/soc/investigate', async (req, reply) => {
+    const body = req.body ?? {};
+    if (typeof body.type !== 'string') return reply.code(400).send({ error: 'A SOC alert "type" is required.' });
+    const assessment = socAnalyzer.analyze({
+      type: body.type as Soc.SocAlertType,
+      title: typeof body.title === 'string' ? body.title : undefined,
+      context: typeof body.context === 'string' ? body.context : undefined,
+      artifacts: Array.isArray(body.artifacts) ? body.artifacts.map(String) : undefined,
+      logs: Array.isArray(body.logs) ? body.logs.map(String) : undefined,
+    });
+    audit.record(Ethics.auditEntry('soc.assessed', { type: body.type, verdict: assessment.verdict, escalate: assessment.escalate }));
+    return { assessment, report: Cases.socReport(assessment) };
   });
 
   // OSINT (Layer IV): passive, public-source investigation of an indicator.

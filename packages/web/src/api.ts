@@ -1,19 +1,58 @@
-import type { Verdict } from '@feluda/core';
+import type { Verdict, Osint, Soc, Cases } from '@feluda/core';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
 
 export type { Verdict };
+export type OsintResult = Osint.OsintResult;
+export type SocAssessment = Soc.SocAssessment;
+export type SocAlertType = Soc.SocAlertType;
+export type CaseRecord = Cases.CaseRecord;
 
-/** Submit a question to the deduction loop and return the transparent verdict. */
-export async function investigate(question: string): Promise<Verdict> {
-  const res = await fetch(`${BASE_URL}/api/investigate`, {
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
-    throw new Error(detail.error ?? `Request failed (${res.status})`);
+    throw new Error(detail.error ?? detail.refusal?.lawfulAlternative ?? `Request failed (${res.status})`);
   }
-  return (await res.json()) as Verdict;
+  return (await res.json()) as T;
 }
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`);
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return (await res.json()) as T;
+}
+
+/** Run the deduction loop on a free-text question. */
+export function investigate(question: string): Promise<Verdict> {
+  return post<Verdict>('/api/investigate', { question });
+}
+
+/** Passive OSINT investigation of an indicator. */
+export function osintInvestigate(target: string): Promise<OsintResult> {
+  return post<OsintResult>('/api/osint/investigate', { target });
+}
+
+/** Defensive SOC alert triage. */
+export function socInvestigate(input: {
+  type: SocAlertType;
+  title?: string;
+  context?: string;
+  logs?: string[];
+  artifacts?: string[];
+}): Promise<{ assessment: SocAssessment; report: { content: string } }> {
+  return post('/api/soc/investigate', input);
+}
+
+export const casesApi = {
+  list: () => get<{ cases: CaseRecord[] }>('/api/cases'),
+  create: (title: string, objective?: string) => post<{ case: CaseRecord }>('/api/cases', { title, objective }),
+  get: (id: string) => get<{ case: CaseRecord }>(`/api/cases/${id}`),
+  investigate: (id: string, question: string) =>
+    post<{ case: CaseRecord; verdict: Verdict }>(`/api/cases/${id}/investigate`, { question }),
+  report: (id: string, type = 'osint_case') => get<{ report: { content: string } }>(`/api/cases/${id}/report?type=${type}`),
+};

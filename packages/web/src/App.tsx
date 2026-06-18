@@ -8,6 +8,9 @@ import { useState, type FormEvent } from 'react';
 import { investigate, type Verdict } from './api.js';
 import { VerdictView } from './components/VerdictView.js';
 import { Dashboard } from './components/Dashboard.js';
+import { OsintPanel } from './components/OsintPanel.js';
+import { SocPanel } from './components/SocPanel.js';
+import { CasesPanel } from './components/CasesPanel.js';
 import { useVoice } from './voice.js';
 
 interface UserMessage {
@@ -24,7 +27,8 @@ interface ErrorMessage {
 }
 type Message = UserMessage | FeludaMessage | ErrorMessage;
 
-type Tab = 'chat' | 'dashboard';
+type Tab = 'chat' | 'dashboard' | 'osint' | 'soc' | 'cases';
+const TABS: Tab[] = ['chat', 'dashboard', 'osint', 'soc', 'cases'];
 
 export function App(): JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -67,7 +71,7 @@ export function App(): JSX.Element {
             <p className="text-sm text-slate-400">A calm, rigorous investigator that shows its work.</p>
           </div>
           <nav className="flex gap-1 rounded-lg bg-slate-800 p-1 text-sm">
-            {(['chat', 'dashboard'] as Tab[]).map((t) => (
+            {TABS.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -82,6 +86,18 @@ export function App(): JSX.Element {
         {tab === 'dashboard' ? (
           <div className="flex-1 pb-8">
             <Dashboard verdicts={verdicts} />
+          </div>
+        ) : tab === 'osint' ? (
+          <div className="flex-1 pb-8">
+            <OsintPanel />
+          </div>
+        ) : tab === 'soc' ? (
+          <div className="flex-1 pb-8">
+            <SocPanel />
+          </div>
+        ) : tab === 'cases' ? (
+          <div className="flex-1 pb-8">
+            <CasesPanel />
           </div>
         ) : (
           <>

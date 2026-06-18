@@ -85,9 +85,35 @@ runs and is fully tested without keys or network:
 
 `/health` reports the current mode for each.
 
+## Investigation platform (OSINT / SOC)
+
+Beyond chat, Feluda is a lawful, passive investigation platform:
+
+- **Iterative deduction** — multi-round Bayesian belief updating with
+  discriminating follow-up questions (Layer II).
+- **OSINT engine** — target classification, entity extraction, A–F source
+  grading, passive profiles (`docs/OSINT_ENGINE.md`).
+- **SOC workflows** — defensive alert triage across 12 alert types
+  (`docs/SOC_WORKFLOWS.md`).
+- **Cases** — first-class case records, timeline, professional reports
+  (`docs/INVESTIGATION_CASES.md`).
+- **Investigative council** — role-based scrutiny (Skeptic/Verifier/Ethics/Judge).
+- **Web dashboard** — OSINT / SOC / Cases panels (`docs/WEB_DASHBOARD.md`).
+
+### CLI
+
+```bash
+npm run feluda -- investigate "Why did the login fail?"
+npm run feluda -- osint --target example.com --type domain
+npm run feluda -- soc --type brute_force --log "Failed password for admin" --log "..."
+```
+
 ## Key REST endpoints
 
-`POST /api/investigate` · `POST /api/notes` · `GET /api/memory/recall` ·
+`POST /api/investigate` · `POST /api/osint/investigate` ·
+`POST /api/osint/extract-entities` · `POST /api/soc/investigate` ·
+`POST /api/cases` (+ `evidence`/`investigate`/`timeline`/`report`) ·
+`POST /api/council/review` · `POST /api/notes` · `GET /api/memory/recall` ·
 `POST /api/ingest` · `POST /api/actions` · `POST /api/feedback` ·
 `POST /api/playbooks` · `POST /api/self-review` · `POST /api/briefings`.
 

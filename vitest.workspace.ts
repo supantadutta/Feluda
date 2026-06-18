@@ -12,7 +12,7 @@ export default defineWorkspace([
       name: 'node',
       globals: true,
       environment: 'node',
-      include: ['packages/{core,api}/**/*.{test,spec}.ts'],
+      include: ['packages/{core,api,cli}/**/*.{test,spec}.ts'],
       exclude: ['**/node_modules/**', '**/dist/**'],
     },
   },

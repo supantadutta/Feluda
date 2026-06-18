@@ -53,11 +53,16 @@ export function extractEntities(text: string): EntityNode[] {
 
 /** Build a simple star graph linking a primary entity to the others observed. */
 export function buildGraph(primary: EntityNode | undefined, others: EntityNode[]): InvestigationGraph {
-  const nodes = primary ? [primary, ...others.filter((o) => o.id !== primary.id)] : others;
-  const edges = primary
-    ? others
-        .filter((o) => o.id !== primary.id)
-        .map((o) => ({ from: primary.id, to: o.id, kind: 'observed_in' as const }))
-    : [];
+  // De-duplicate by type:value and drop any that duplicate the primary node.
+  const seen = new Set<string>(primary ? [`${primary.type}:${primary.value}`] : []);
+  const distinct: EntityNode[] = [];
+  for (const o of others) {
+    const key = `${o.type}:${o.value}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    distinct.push(o);
+  }
+  const nodes = primary ? [primary, ...distinct] : distinct;
+  const edges = primary ? distinct.map((o) => ({ from: primary.id, to: o.id, kind: 'observed_in' as const })) : [];
   return { nodes, edges };
 }

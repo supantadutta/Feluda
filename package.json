@@ -11,13 +11,15 @@
   "workspaces": [
     "packages/core",
     "packages/api",
-    "packages/web"
+    "packages/web",
+    "packages/cli"
   ],
   "scripts": {
     "dev": "npm-run-all --parallel dev:api dev:web",
     "dev:api": "npm run dev --workspace @feluda/api",
     "dev:web": "npm run dev --workspace @feluda/web",
-    "build": "npm run build --workspace @feluda/core && npm run build --workspace @feluda/api && npm run build --workspace @feluda/web",
+    "feluda": "tsx packages/cli/src/index.ts",
+    "build": "npm run build --workspace @feluda/core && npm run build --workspace @feluda/api && npm run build --workspace @feluda/web && npm run build --workspace @feluda/cli",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "npm run typecheck --workspaces --if-present",

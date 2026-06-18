@@ -84,8 +84,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   // Action layer (VI). Consequential actions are blocked until confirmed.
   const action = Action.createActionPort();
 
-  // OSINT engine — lawful, passive, public-source (offline fixtures by default).
-  const osint = new Osint.OsintEngine();
+  // OSINT engine — lawful, passive, public-source. Offline fixtures by default;
+  // keyless live providers (RDAP, DNS-over-HTTPS) when FELUDA_OSINT_LIVE=true.
+  const osint = Osint.createOsintEngine({ live: config.osintLive });
   const ethics = Ethics.createEthicsGate();
 
   // Investigation cases, SOC analyzer, and the professional report generator.

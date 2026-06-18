@@ -21,6 +21,8 @@ export interface Config {
   councilEnabled: boolean;
   councilModels: string[];
   councilCostCapUsd: number;
+  /** Enable keyless live OSINT providers (RDAP, DNS-over-HTTPS). */
+  osintLive: boolean;
 }
 
 export function loadConfig(): Config {
@@ -38,5 +40,6 @@ export function loadConfig(): Config {
       .map((m) => m.trim())
       .filter(Boolean),
     councilCostCapUsd: Number(process.env.COUNCIL_COST_CAP_USD ?? 0.5),
+    osintLive: process.env.FELUDA_OSINT_LIVE === 'true',
   };
 }

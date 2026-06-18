@@ -34,7 +34,19 @@ classify target → select passive providers → grade sources (A–F) → extra
 
 Default is offline fixtures (no keys, fully testable). `OsintResult.offline` and
 the `notes` make this explicit, so a fixture is never mistaken for a live
-authoritative finding. Set provider keys to enable live lookups.
+authoritative finding.
+
+**Live mode** (`createOsintEngine({ live: true })`, or `FELUDA_OSINT_LIVE=true`
+for the API) enables keyless, public, passive providers:
+
+- **RDAP** (`RdapProvider`) — authoritative domain/IP registration data via the
+  public RDAP bootstrap (`rdap.org`). Graded **A**.
+- **DNS-over-HTTPS** (`DnsProvider`) — A/MX/NS records via a public DoH resolver.
+
+Both are read-only lookups (no scanning/probing) and cite the **exact endpoint
+queried**, so provenance is real. Other live providers (reputation, threat-intel)
+that need keys slot in behind the same `OsintProvider` interface. Parsing is
+unit-tested with a mocked `fetch` (`osint-live.test.ts`).
 
 ## API
 

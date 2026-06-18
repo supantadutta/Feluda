@@ -12,4 +12,6 @@ export { extractEntities, buildGraph } from './entities.js';
 export { gradeFromCredibility, freshnessScore, isStale } from './grading.js';
 export { profileFor } from './profiles.js';
 export { OfflineOsintProvider, type OsintProvider } from './providers.js';
-export { OsintEngine, type OsintEngineConfig } from './engine.js';
+export { RdapProvider, type RdapConfig } from './providers/rdap.js';
+export { DnsProvider, type DnsConfig } from './providers/dns.js';
+export { OsintEngine, createOsintEngine, type OsintEngineConfig } from './engine.js';

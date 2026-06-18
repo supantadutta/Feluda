@@ -11,6 +11,7 @@ const config = {
   councilEnabled: false,
   councilModels: [] as string[],
   councilCostCapUsd: 0.5,
+  osintLive: false,
 };
 
 describe('OSINT API', () => {

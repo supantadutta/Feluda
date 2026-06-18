@@ -19,6 +19,7 @@ describe('POST /api/investigate', () => {
       councilEnabled: false,
       councilModels: [],
       councilCostCapUsd: 0.5,
+      osintLive: false,
     });
   });
 

@@ -8,6 +8,8 @@ import { classifyTarget } from './targets.js';
 import { profileFor } from './profiles.js';
 import { extractEntities, buildGraph } from './entities.js';
 import { OfflineOsintProvider, type OsintProvider } from './providers.js';
+import { RdapProvider } from './providers/rdap.js';
+import { DnsProvider } from './providers/dns.js';
 import type { EntityNode, OsintResult, OsintTarget, OsintTargetType } from './types.js';
 
 export interface OsintEngineConfig {
@@ -44,6 +46,18 @@ export class OsintEngine {
 
     return { target, findings, graph, offline, notes };
   }
+}
+
+/**
+ * Build an OSINT engine. Offline by default (deterministic fixtures). When
+ * `live` is set, adds keyless public live providers (RDAP, DNS-over-HTTPS) — the
+ * offline provider is dropped so live, cited data is preferred.
+ */
+export function createOsintEngine(config: { live?: boolean } = {}): OsintEngine {
+  if (config.live) {
+    return new OsintEngine({ providers: [new RdapProvider(), new DnsProvider()] });
+  }
+  return new OsintEngine();
 }
 
 function entityForTarget(target: OsintTarget): EntityNode | undefined {

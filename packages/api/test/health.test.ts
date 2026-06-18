@@ -16,6 +16,7 @@ describe('api /health', () => {
       councilEnabled: false,
       councilModels: [],
       councilCostCapUsd: 0.5,
+      osintLive: false,
     });
   });
 

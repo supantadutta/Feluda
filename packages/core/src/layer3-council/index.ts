@@ -54,6 +54,7 @@ export {
   type CouncilOutcome,
 } from './panel.js';
 export { SpecialistRouter, type TaskType } from './routing.js';
+export { InvestigativeCouncil, type CouncilReviewInput } from './investigative-council.js';
 
 import { Council, type PanelMember } from './panel.js';
 

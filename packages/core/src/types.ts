@@ -100,6 +100,8 @@ export interface Verdict {
   reviewFlags?: ReviewFlag[];
   /** How the agentic deduction loop ran (rounds, convergence). */
   investigation?: InvestigationSummary;
+  /** Role-based investigative council review (Layer III). */
+  councilReview?: CouncilReview;
   /**
    * Set when the request (or a generated answer) was blocked by the Ethics
    * layer. The answer then states the refusal and proposes a lawful path.
@@ -109,6 +111,25 @@ export interface Verdict {
     reason: string;
     lawfulAlternative: string;
   };
+}
+
+/** A seat on the role-based investigative council (Layer III). */
+export type CouncilRoleId = 'lead' | 'skeptic' | 'osint' | 'cyber' | 'verifier' | 'ethics' | 'judge';
+
+/** One role's observation about the investigation. */
+export interface RoleFinding {
+  role: CouncilRoleId;
+  severity: 'info' | 'concern' | 'critical';
+  message: string;
+}
+
+/** The council's calibrated review of an investigation. */
+export interface CouncilReview {
+  findings: RoleFinding[];
+  /** Evidence that, if gathered, would most strengthen the conclusion. */
+  missingEvidence: string[];
+  /** Whether it is safe to conclude, or more work/escalation is needed. */
+  recommendation: 'proceed' | 'gather_more' | 'do_not_conclude';
 }
 
 /** A summary of how the iterative deduction loop ran (Layer II). */

@@ -40,6 +40,23 @@ export function VerdictView({ verdict }: { verdict: Verdict }): JSX.Element {
         </div>
       )}
 
+      {verdict.councilReview && verdict.councilReview.findings.some((f) => f.severity !== 'info') && (
+        <details className="rounded border border-slate-700 bg-slate-900/50 p-2 text-xs">
+          <summary className="cursor-pointer font-semibold text-slate-300">
+            Council review · {verdict.councilReview.recommendation.replace(/_/g, ' ')}
+          </summary>
+          <ul className="mt-1 space-y-0.5">
+            {verdict.councilReview.findings
+              .filter((f) => f.severity !== 'info')
+              .map((f, i) => (
+                <li key={i} className={f.severity === 'critical' ? 'text-rose-300' : 'text-amber-300'}>
+                  <span className="uppercase text-slate-500">{f.role}</span> · {f.message}
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
+
       {verdict.council && (
         <div className="rounded border border-slate-700 bg-slate-900/50 p-2 text-xs">
           <div className="flex items-center justify-between">

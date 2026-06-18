@@ -13,6 +13,7 @@
  */
 import type { Citation, Evidence, Query, Verdict, CouncilReport, ReviewFlag, InvestigationSummary } from '../types.js';
 import type { ModelGateway, Council } from '../layer3-council/index.js';
+import { InvestigativeCouncil } from '../layer3-council/index.js';
 import type { EvidencePort } from '../layer4-evidence/index.js';
 import { hostOf } from '../layer4-evidence/index.js';
 import type { MemoryPort, MemoryItem, FeedbackStore, PatternLibrary, SelfReview } from '../layer5-memory/index.js';
@@ -54,10 +55,12 @@ export class DeductionOrchestrator implements Orchestrator {
   private readonly synthesizer: LlmSynthesizer;
   private readonly planner = new InvestigationPlanner();
   private readonly questioner = new DiscriminatingQuestioner();
+  private readonly investigativeCouncil: InvestigativeCouncil;
 
   constructor(private readonly deps: OrchestratorDeps) {
     this.hypothesisEngine = new LlmHypothesisEngine(deps.gateway);
     this.synthesizer = new LlmSynthesizer(deps.gateway);
+    this.investigativeCouncil = new InvestigativeCouncil(deps.ethics);
   }
 
   async investigate(query: Query): Promise<Verdict> {
@@ -209,6 +212,20 @@ export class DeductionOrchestrator implements Orchestrator {
     // Citation trail: ONLY from gathered evidence — never invented by the model.
     const citations: Citation[] = dedupeCitations(evidence.map((e) => e.citation));
 
+    // ── Investigative council review (role-based scrutiny, deterministic) ──
+    const councilReview = this.investigativeCouncil.review({
+      answer: synth.answer,
+      hypotheses: weighed,
+      evidence,
+      confidence,
+      citations,
+    });
+    tracer.record(
+      'cross-examine',
+      `Council review: ${councilReview.recommendation.replace(/_/g, ' ')}` +
+        `${councilReview.findings.filter((f) => f.severity !== 'info').length > 0 ? '; concerns raised' : ''}.`,
+    );
+
     // ── Screen the outbound answer (Layer VII) ──
     const outbound = ethics.screenResponse(synth.answer);
     if (!outbound.allowed) {
@@ -239,6 +256,7 @@ export class DeductionOrchestrator implements Orchestrator {
       council: councilReport,
       reviewFlags: reviewFlags.length > 0 ? reviewFlags : undefined,
       investigation,
+      councilReview,
     };
 
     if (this.deps.memory?.rememberCase) await this.deps.memory.rememberCase(query, verdict);

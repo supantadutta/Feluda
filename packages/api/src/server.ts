@@ -233,6 +233,28 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     },
   );
 
+  // ── Investigative council review (Layer III): scrutinise a draft conclusion ──
+  const investigativeCouncil = new Council.InvestigativeCouncil(ethics);
+  app.post<{ Body: { answer?: unknown; hypotheses?: unknown; evidence?: unknown; confidence?: unknown } }>(
+    '/api/council/review',
+    async (req, reply) => {
+      const b = req.body ?? {};
+      if (typeof b.answer !== 'string') return reply.code(400).send({ error: 'An "answer" string is required.' });
+      const review = investigativeCouncil.review({
+        answer: b.answer,
+        hypotheses: Array.isArray(b.hypotheses) ? (b.hypotheses as never[]) : [],
+        evidence: Array.isArray(b.evidence) ? (b.evidence as never[]) : [],
+        confidence: (b.confidence as { score: number; band: 'low' | 'medium' | 'high'; gaps: string[] }) ?? {
+          score: 0,
+          band: 'low',
+          gaps: [],
+        },
+        citations: [],
+      });
+      return { review };
+    },
+  );
+
   // ── Defensive SOC investigation (Layer VI) ──
   app.post<{ Body: Record<string, unknown> }>('/api/soc/investigate', async (req, reply) => {
     const body = req.body ?? {};

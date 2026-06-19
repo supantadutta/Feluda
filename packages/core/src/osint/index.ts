@@ -14,4 +14,5 @@ export { profileFor } from './profiles.js';
 export { OfflineOsintProvider, type OsintProvider } from './providers.js';
 export { RdapProvider, type RdapConfig } from './providers/rdap.js';
 export { DnsProvider, type DnsConfig } from './providers/dns.js';
+export { ReputationProvider, type ReputationConfig } from './providers/reputation.js';
 export { OsintEngine, createOsintEngine, type OsintEngineConfig } from './engine.js';

@@ -18,6 +18,7 @@ export * as Ethics from './layer7-ethics/index.js';
 export * as Osint from './osint/index.js';
 export * as Cases from './case/index.js';
 export * as Soc from './soc/index.js';
+export * as Evaluation from './eval/index.js';
 
 /** Build/identity marker — handy for the API health check. */
 export const FELUDA_CORE_VERSION = '0.1.0';

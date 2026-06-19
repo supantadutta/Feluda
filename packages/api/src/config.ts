@@ -23,6 +23,8 @@ export interface Config {
   councilCostCapUsd: number;
   /** Enable keyless live OSINT providers (RDAP, DNS-over-HTTPS). */
   osintLive: boolean;
+  /** Optional key for the key-gated reputation/threat-intel provider. */
+  reputationApiKey?: string;
 }
 
 export function loadConfig(): Config {
@@ -41,5 +43,6 @@ export function loadConfig(): Config {
       .filter(Boolean),
     councilCostCapUsd: Number(process.env.COUNCIL_COST_CAP_USD ?? 0.5),
     osintLive: process.env.FELUDA_OSINT_LIVE === 'true',
+    reputationApiKey: process.env.FELUDA_REPUTATION_API_KEY || undefined,
   };
 }

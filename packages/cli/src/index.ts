@@ -15,6 +15,7 @@ import {
   Evidence as EvidenceLayer,
   Osint,
   Soc,
+  Evaluation,
 } from '@feluda/core';
 
 export interface RunResult {
@@ -28,6 +29,7 @@ Usage:
   feluda investigate "<question>"
   feluda osint --target <indicator> [--type <type>]
   feluda soc --type <alert_type> [--title <t>] [--context <c>] [--log <line> ...]
+  feluda eval
   feluda --help
 
 Offline by default. Set ANTHROPIC_API_KEY / WEB_SEARCH_API_KEY for live mode.`;
@@ -81,9 +83,25 @@ export async function run(argv: string[]): Promise<RunResult> {
       });
       return { code: 0, out: renderSoc(assessment) };
     }
+    case 'eval': {
+      const report = await new Evaluation.Evaluator().evaluate(Evaluation.GOLDEN_CASES);
+      return { code: report.passRate === 1 ? 0 : 1, out: renderEval(report) };
+    }
     default:
       return { code: 1, out: `error: unknown command "${command}"\n\n${HELP}` };
   }
+}
+
+function renderEval(r: Evaluation.EvalReport): string {
+  return [
+    'EVALUATION (golden suite)',
+    ...r.results.map((c) => `  ${c.passed ? 'PASS' : 'FAIL'}  ${c.id} — band ${c.band}${c.failures.length ? ` (${c.failures.join('; ')})` : ''}`),
+    '',
+    `PASS RATE: ${(r.passRate * 100).toFixed(0)}% (${r.results.filter((c) => c.passed).length}/${r.total})`,
+    r.brier !== undefined ? `BRIER (calibration, lower=better): ${r.brier.toFixed(3)}` : '',
+    `OVERCONFIDENT-INCORRECT: ${r.overconfidentIncorrect}`,
+    '',
+  ].filter(Boolean).join('\n');
 }
 
 function renderVerdict(v: { answer: string; confidence: { band: string; score: number; gaps: string[] }; citations: { source: string }[]; investigation?: { rounds: number; mode: string } }): string {

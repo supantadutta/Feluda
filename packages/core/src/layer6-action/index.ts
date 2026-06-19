@@ -39,6 +39,7 @@ export interface ActionPort {
 }
 
 export { ReportBuilder, type ReportFormat, type Report } from './report-builder.js';
+export { verdictToDocx, sectionsToDocx, type DocxSection } from './docx-report.js';
 export { DataAnalyzer, type DataAnalysis, type ColumnStats } from './data-analyzer.js';
 export { DefensiveSecurity, type LogFinding } from './defensive-security.js';
 export { DailyOps, type Task } from './daily-ops.js';

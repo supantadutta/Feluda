@@ -86,7 +86,7 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
 
   // OSINT engine — lawful, passive, public-source. Offline fixtures by default;
   // keyless live providers (RDAP, DNS-over-HTTPS) when FELUDA_OSINT_LIVE=true.
-  const osint = Osint.createOsintEngine({ live: config.osintLive });
+  const osint = Osint.createOsintEngine({ live: config.osintLive, reputationApiKey: config.reputationApiKey });
   const ethics = Ethics.createEthicsGate();
 
   // Investigation cases, SOC analyzer, and the professional report generator.
@@ -255,6 +255,14 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
       return { review };
     },
   );
+
+  // Reports (Layer VI): export a verdict as a .docx (base64-encoded).
+  app.post<{ Body: { verdict?: unknown; title?: unknown } }>('/api/reports/docx', async (req, reply) => {
+    const { verdict, title } = req.body ?? {};
+    if (!verdict || typeof verdict !== 'object') return reply.code(400).send({ error: 'A "verdict" object is required.' });
+    const buf = await Action.verdictToDocx(verdict as Verdict, typeof title === 'string' ? title : undefined);
+    return { filename: 'feluda-report.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: buf.toString('base64') };
+  });
 
   // ── Defensive SOC investigation (Layer VI) ──
   app.post<{ Body: Record<string, unknown> }>('/api/soc/investigate', async (req, reply) => {

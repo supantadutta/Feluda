@@ -10,6 +10,7 @@ import { extractEntities, buildGraph } from './entities.js';
 import { OfflineOsintProvider, type OsintProvider } from './providers.js';
 import { RdapProvider } from './providers/rdap.js';
 import { DnsProvider } from './providers/dns.js';
+import { ReputationProvider } from './providers/reputation.js';
 import type { EntityNode, OsintResult, OsintTarget, OsintTargetType } from './types.js';
 
 export interface OsintEngineConfig {
@@ -53,9 +54,12 @@ export class OsintEngine {
  * `live` is set, adds keyless public live providers (RDAP, DNS-over-HTTPS) — the
  * offline provider is dropped so live, cited data is preferred.
  */
-export function createOsintEngine(config: { live?: boolean } = {}): OsintEngine {
+export function createOsintEngine(config: { live?: boolean; reputationApiKey?: string } = {}): OsintEngine {
   if (config.live) {
-    return new OsintEngine({ providers: [new RdapProvider(), new DnsProvider()] });
+    const providers: OsintProvider[] = [new RdapProvider(), new DnsProvider()];
+    // Reputation/threat-intel is key-gated; only added when a key is supplied.
+    if (config.reputationApiKey) providers.push(new ReputationProvider({ apiKey: config.reputationApiKey }));
+    return new OsintEngine({ providers });
   }
   return new OsintEngine();
 }

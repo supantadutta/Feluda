@@ -4,7 +4,7 @@
  * Phase 7: a tabbed PWA — Chat (the deduction loop) and a Case Dashboard
  * (evidence board, timeline, link-graph), plus voice mode (speech in / out).
  */
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { investigate, type Verdict } from './api.js';
 import { VerdictView } from './components/VerdictView.js';
 import { Dashboard } from './components/Dashboard.js';
@@ -12,6 +12,7 @@ import { OsintPanel } from './components/OsintPanel.js';
 import { SocPanel } from './components/SocPanel.js';
 import { CasesPanel } from './components/CasesPanel.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
+import { LearningPanel } from './components/LearningPanel.js';
 import { useVoice } from './voice.js';
 
 interface UserMessage {
@@ -28,8 +29,8 @@ interface ErrorMessage {
 }
 type Message = UserMessage | FeludaMessage | ErrorMessage;
 
-type Tab = 'chat' | 'dashboard' | 'osint' | 'soc' | 'cases' | 'settings';
-const TABS: Tab[] = ['chat', 'dashboard', 'osint', 'soc', 'cases', 'settings'];
+type Tab = 'chat' | 'dashboard' | 'osint' | 'soc' | 'cases' | 'learning' | 'settings';
+const TABS: Tab[] = ['chat', 'dashboard', 'osint', 'soc', 'cases', 'learning', 'settings'];
 
 export function App(): JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,6 +41,15 @@ export function App(): JSX.Element {
   const voice = useVoice();
 
   const verdicts = messages.filter((m): m is FeludaMessage => m.role === 'feluda').map((m) => m.verdict);
+
+  const [statusLine, setStatusLine] = useState('connecting…');
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001';
+    fetch(`${base}/health`)
+      .then((r) => r.json())
+      .then((h) => setStatusLine(`${h.provider ?? '—'} · ${h.modelMode} · evidence:${h.evidenceMode}`))
+      .catch(() => setStatusLine('offline'));
+  }, [tab]);
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -64,19 +74,32 @@ export function App(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4">
-        <header className="flex items-center justify-between py-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Feluda</h1>
-            <p className="text-sm text-slate-400">A calm, rigorous investigator that shows its work.</p>
+    <main className="min-h-screen text-slate-100">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4">
+        <header className="sticky top-0 z-20 -mx-4 mb-2 border-b border-cyan-500/20 px-4 py-4 glass">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-9 w-9 place-items-center rounded-md neon-border text-lg neon-text">◉</div>
+              <div>
+                <h1 className="text-xl font-bold uppercase tracking-[0.3em] neon-text">FELUDA</h1>
+                <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500">Investigative Intelligence Deck</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-cyan-500/20 bg-slate-950/50 px-3 py-1 text-[11px] text-cyan-200/80">
+              <span className="pulse-dot text-emerald-400">●</span>
+              <span className="font-mono">{statusLine}</span>
+            </div>
           </div>
-          <nav className="flex gap-1 rounded-lg bg-slate-800 p-1 text-sm">
+          <nav className="mt-3 flex flex-wrap gap-1 text-xs">
             {TABS.map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`rounded px-3 py-1 capitalize ${tab === t ? 'bg-sky-600' : 'text-slate-300'}`}
+                className={`rounded px-3 py-1 uppercase tracking-widest transition ${
+                  tab === t
+                    ? 'neon-border bg-cyan-500/10 neon-text'
+                    : 'border border-transparent text-slate-400 hover:text-cyan-200'
+                }`}
               >
                 {t}
               </button>
@@ -99,6 +122,10 @@ export function App(): JSX.Element {
         ) : tab === 'cases' ? (
           <div className="flex-1 pb-8">
             <CasesPanel />
+          </div>
+        ) : tab === 'learning' ? (
+          <div className="flex-1 pb-8">
+            <LearningPanel />
           </div>
         ) : tab === 'settings' ? (
           <div className="flex-1 pb-8">

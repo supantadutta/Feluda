@@ -12,6 +12,7 @@ import {
   Osint,
   Cases,
   Soc,
+  Learning,
   type Verdict,
 } from '@feluda/core';
 // `Council` namespace exposes both the gateway factory and createCouncil.
@@ -309,6 +310,16 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     if (!verdict || typeof verdict !== 'object') return reply.code(400).send({ error: 'A "verdict" object is required.' });
     const buf = await Action.verdictToDocx(verdict as Verdict, typeof title === 'string' ? title : undefined);
     return { filename: 'feluda-report.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: buf.toString('base64') };
+  });
+
+  // ── Synthetic learning (Layer V): train on synthetic cases, measure lift ──
+  app.post<{ Body: { rounds?: unknown; perClassPerRound?: unknown } }>('/api/learning/run', async (req, reply) => {
+    const b = req.body ?? {};
+    const rounds = typeof b.rounds === 'number' && b.rounds > 0 && b.rounds <= 20 ? b.rounds : 5;
+    const perClassPerRound = typeof b.perClassPerRound === 'number' && b.perClassPerRound > 0 && b.perClassPerRound <= 5 ? b.perClassPerRound : 1;
+    const report = new Learning.SyntheticTrainer().run({ rounds, perClassPerRound });
+    audit.record(Ethics.auditEntry('learning.run', { rounds, finalAccuracy: report.finalAccuracy }));
+    return reply.send({ report });
   });
 
   // ── Defensive SOC investigation (Layer VI) ──

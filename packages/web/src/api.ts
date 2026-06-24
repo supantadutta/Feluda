@@ -63,6 +63,18 @@ export const settingsApi = {
   test: () => post<{ ok: boolean; model?: string; sample?: string }>('/api/settings/provider/test', {}),
 };
 
+export interface LearningReport {
+  labels: string[];
+  baselineAccuracy: number;
+  rounds: { round: number; trainedTotal: number; accuracy: number }[];
+  finalAccuracy: number;
+  improvement: number;
+}
+
+export const learningApi = {
+  run: (rounds = 5) => post<{ report: LearningReport }>('/api/learning/run', { rounds }),
+};
+
 export const casesApi = {
   list: () => get<{ cases: CaseRecord[] }>('/api/cases'),
   create: (title: string, objective?: string) => post<{ case: CaseRecord }>('/api/cases', { title, objective }),

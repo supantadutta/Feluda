@@ -25,6 +25,14 @@ export interface Config {
   osintLive: boolean;
   /** Optional key for the key-gated reputation/threat-intel provider. */
   reputationApiKey?: string;
+  /** When set, every /api/* request must send this key (x-api-key / Bearer). */
+  apiKey?: string;
+  /** Max request body size in bytes. */
+  maxBodyBytes: number;
+  /** Max requests per minute per IP (rate limit). */
+  rateLimitMax: number;
+  /** File path to persist investigation cases (survives restart). */
+  casesPath?: string;
 }
 
 export function loadConfig(): Config {
@@ -44,5 +52,9 @@ export function loadConfig(): Config {
     councilCostCapUsd: Number(process.env.COUNCIL_COST_CAP_USD ?? 0.5),
     osintLive: process.env.FELUDA_OSINT_LIVE === 'true',
     reputationApiKey: process.env.FELUDA_REPUTATION_API_KEY || undefined,
+    apiKey: process.env.FELUDA_API_KEY || undefined,
+    maxBodyBytes: Number(process.env.FELUDA_MAX_BODY_BYTES ?? 1_000_000),
+    rateLimitMax: Number(process.env.FELUDA_RATE_LIMIT_MAX ?? 240),
+    casesPath: process.env.FELUDA_CASES_PATH || undefined,
   };
 }

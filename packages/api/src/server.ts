@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import {
   FELUDA_CORE_VERSION,
   InterfaceLayer,
@@ -33,14 +35,31 @@ interface InvestigateBody {
  */
 export async function buildServer(config: Config = loadConfig()): Promise<FastifyInstance> {
   const app = Fastify({
+    // Cap request bodies to blunt abuse / accidental huge payloads.
+    bodyLimit: config.maxBodyBytes,
     logger: {
       level: config.nodeEnv === 'test' ? 'silent' : 'info',
       // Redaction guard: never log Authorization headers or api keys.
-      redact: ['req.headers.authorization', '*.apiKey', '*.anthropicApiKey', '*.ANTHROPIC_API_KEY'],
+      redact: ['req.headers.authorization', 'req.headers["x-api-key"]', '*.apiKey', '*.anthropicApiKey', '*.ANTHROPIC_API_KEY'],
     },
   });
 
+  // Security headers + CORS + rate limiting.
+  await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, { origin: config.webOrigin });
+  await app.register(rateLimit, { max: config.rateLimitMax, timeWindow: '1 minute' });
+
+  // Optional API-key gate: when FELUDA_API_KEY is set, every /api/* call must
+  // present it (x-api-key header or `Authorization: Bearer`). /health stays open.
+  if (config.apiKey) {
+    app.addHook('onRequest', async (req, reply) => {
+      if (!req.url.startsWith('/api/')) return;
+      const provided = req.headers['x-api-key'] ?? (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (provided !== config.apiKey) {
+        return reply.code(401).send({ error: 'Unauthorized: a valid API key is required.' });
+      }
+    });
+  }
 
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
   const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
@@ -95,8 +114,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   const osint = Osint.createOsintEngine({ live: config.osintLive, reputationApiKey: config.reputationApiKey });
   const ethics = Ethics.createEthicsGate();
 
-  // Investigation cases, SOC analyzer, and the professional report generator.
-  const cases = new Cases.CaseManager();
+  // Investigation cases (file-backed when FELUDA_CASES_PATH is set), SOC
+  // analyzer, and the professional report generator.
+  const cases = new Cases.CaseManager(config.casesPath ? new Cases.FileCaseStore(config.casesPath) : undefined);
   const socAnalyzer = new Soc.SocAnalyzer();
   const caseReports = new Cases.CaseReportBuilder();
 

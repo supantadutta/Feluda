@@ -12,6 +12,8 @@ const config = {
   councilModels: [] as string[],
   councilCostCapUsd: 0.5,
   osintLive: false,
+  maxBodyBytes: 1000000,
+  rateLimitMax: 1000,
 };
 
 describe('Case + SOC API', () => {

@@ -10,7 +10,7 @@ export default defineConfig({
   target: 'node18',
   noExternal: ['@feluda/core'],
   // Heavy/CJS runtime deps stay external (resolved from node_modules at runtime).
-  external: ['@anthropic-ai/sdk', 'docx', 'fastify', '@fastify/cors', 'dotenv'],
+  external: ['@anthropic-ai/sdk', 'docx', 'fastify', '@fastify/cors', '@fastify/helmet', '@fastify/rate-limit', 'dotenv'],
   clean: true,
   sourcemap: true,
 });

@@ -20,6 +20,8 @@ describe('POST /api/investigate', () => {
       councilModels: [],
       councilCostCapUsd: 0.5,
       osintLive: false,
+      maxBodyBytes: 1000000,
+      rateLimitMax: 1000,
     });
   });
 

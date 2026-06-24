@@ -3,6 +3,6 @@
  * timeline reconstruction.
  */
 export * from './types.js';
-export { CaseManager, InMemoryCaseStore } from './case-manager.js';
+export { CaseManager, InMemoryCaseStore, FileCaseStore } from './case-manager.js';
 export { buildTimeline } from './timeline-builder.js';
 export { CaseReportBuilder, socReport, type CaseReportType, type Report } from './report.js';

@@ -4,6 +4,8 @@
  * history, timeline, and unresolved questions), and exposes the case for report
  * generation. Storage sits behind `CaseStore` so it can be swapped later.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { Evidence, Verdict } from '../types.js';
 import { newId } from '../util/ids.js';
 import { extractEntities } from '../osint/index.js';
@@ -11,7 +13,7 @@ import { buildTimeline } from './timeline-builder.js';
 import type { CaseRecord, CaseStore, NewCaseInput } from './types.js';
 
 export class InMemoryCaseStore implements CaseStore {
-  private cases = new Map<string, CaseRecord>();
+  protected cases = new Map<string, CaseRecord>();
   put(record: CaseRecord): void {
     this.cases.set(record.id, record);
   }
@@ -20,6 +22,22 @@ export class InMemoryCaseStore implements CaseStore {
   }
   list(): CaseRecord[] {
     return [...this.cases.values()];
+  }
+}
+
+/** JSON file-backed case store — cases survive restarts (swappable for a DB). */
+export class FileCaseStore extends InMemoryCaseStore {
+  constructor(private readonly path: string) {
+    super();
+    if (existsSync(path)) {
+      const raw = JSON.parse(readFileSync(path, 'utf8')) as CaseRecord[];
+      for (const c of raw) this.cases.set(c.id, c);
+    }
+  }
+  override put(record: CaseRecord): void {
+    super.put(record);
+    mkdirSync(dirname(this.path), { recursive: true });
+    writeFileSync(this.path, JSON.stringify([...this.cases.values()]), 'utf8');
   }
 }
 

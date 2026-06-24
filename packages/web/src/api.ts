@@ -48,6 +48,21 @@ export function socInvestigate(input: {
   return post('/api/soc/investigate', input);
 }
 
+export interface ProviderSettings {
+  provider: 'anthropic' | 'openai' | 'stub';
+  model: string;
+  baseURL: string | null;
+  hasKey: boolean;
+  modelMode: string;
+}
+
+export const settingsApi = {
+  get: () => get<ProviderSettings>('/api/settings/provider'),
+  set: (s: { provider: string; model?: string; baseURL?: string; apiKey?: string }) =>
+    post<ProviderSettings>('/api/settings/provider', s),
+  test: () => post<{ ok: boolean; model?: string; sample?: string }>('/api/settings/provider/test', {}),
+};
+
 export const casesApi = {
   list: () => get<{ cases: CaseRecord[] }>('/api/cases'),
   create: (title: string, objective?: string) => post<{ case: CaseRecord }>('/api/cases', { title, objective }),

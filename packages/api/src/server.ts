@@ -41,45 +41,50 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
 
   await app.register(cors, { origin: config.webOrigin });
 
-  // ── Wire the deduction loop ──
-  // Anthropic when a key is configured, otherwise the offline stub. The audit
-  // log is file-backed so every turn is persisted (Layer VII).
-  const gateway = Council.createModelGateway({
-    apiKey: config.anthropicApiKey,
-    model: config.defaultModel,
-  });
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
   const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
   const audit = new Ethics.FileAuditLog();
-
-  // Multi-AI Council (Layer III) — opt-in. Seats one model id per panel member;
-  // defaults to two seats on the default model so the mechanism is demonstrable.
-  const council = config.councilEnabled
-    ? Council.createCouncil({
-        gateway,
-        models:
-          config.councilModels.length >= 2
-            ? config.councilModels
-            : [config.defaultModel, config.defaultModel],
-        costCapUsd: config.councilCostCapUsd,
-      })
-    : undefined;
-
-  // Adaptive learning (Layer V): feedback, playbooks, and belief-revision.
   const feedback = new Memory.FeedbackStore();
   const patterns = new Memory.PatternLibrary();
   const selfReview = new Memory.SelfReview(memory);
 
-  const orchestrator = InvestigationCore.createOrchestrator({
-    gateway,
-    evidence,
-    memory,
-    council,
-    feedback,
-    patterns,
-    selfReview,
-    audit,
-  });
+  // ── Runtime-configurable AI provider (set from the UI) ──
+  // The gateway/council/orchestrator are rebuilt when the provider changes;
+  // closures below read the current `orchestrator`, so reassignment is picked up.
+  const providerSettings: { provider: Council.ProviderKind; model: string; baseURL?: string } = {
+    provider: config.anthropicApiKey ? 'anthropic' : 'stub',
+    model: config.defaultModel,
+    baseURL: undefined,
+  };
+  let currentApiKey: string | undefined = config.anthropicApiKey;
+  let gateway = Council.createModelGateway({ provider: providerSettings.provider, apiKey: currentApiKey, model: providerSettings.model, baseURL: providerSettings.baseURL });
+
+  const buildCouncil = (): ReturnType<typeof Council.createCouncil> | undefined =>
+    config.councilEnabled
+      ? Council.createCouncil({
+          gateway,
+          models: config.councilModels.length >= 2 ? config.councilModels : [providerSettings.model, providerSettings.model],
+          costCapUsd: config.councilCostCapUsd,
+        })
+      : undefined;
+  const buildOrchestrator = () =>
+    InvestigationCore.createOrchestrator({ gateway, evidence, memory, council, feedback, patterns, selfReview, audit });
+
+  let council = buildCouncil();
+  let orchestrator = buildOrchestrator();
+
+  const modelMode = (): string => (providerSettings.provider === 'stub' || !currentApiKey ? 'offline-stub' : 'live');
+
+  function applyProvider(next: { provider: Council.ProviderKind; model: string; baseURL?: string; apiKey?: string }): void {
+    providerSettings.provider = next.provider;
+    providerSettings.model = next.model;
+    providerSettings.baseURL = next.baseURL;
+    if (next.apiKey !== undefined) currentApiKey = next.apiKey || undefined;
+    gateway = Council.createModelGateway({ provider: next.provider, apiKey: currentApiKey, model: next.model, baseURL: next.baseURL });
+    council = buildCouncil();
+    orchestrator = buildOrchestrator();
+    audit.record(Ethics.auditEntry('provider.changed', { provider: next.provider, model: next.model, hasKey: Boolean(currentApiKey) }));
+  }
 
   // Action layer (VI). Consequential actions are blocked until confirmed.
   const action = Action.createActionPort();
@@ -114,10 +119,52 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     coreVersion: FELUDA_CORE_VERSION,
     phase: PHASE,
     /** Tells the client whether real reasoning is available. */
-    modelMode: config.anthropicApiKey ? 'live' : 'offline-stub',
+    modelMode: modelMode(),
+    provider: providerSettings.provider,
+    model: providerSettings.model,
     evidenceMode: config.searchApiKey ? 'live' : 'offline-fixture',
     councilMode: council ? 'enabled' : 'disabled',
   }));
+
+  // ── AI provider settings (configure any model from the UI) ──
+  app.get('/api/settings/provider', async () => ({
+    provider: providerSettings.provider,
+    model: providerSettings.model,
+    baseURL: providerSettings.baseURL ?? null,
+    hasKey: Boolean(currentApiKey), // never returns the key itself
+    modelMode: modelMode(),
+  }));
+
+  app.post<{ Body: { provider?: unknown; model?: unknown; baseURL?: unknown; apiKey?: unknown } }>(
+    '/api/settings/provider',
+    async (req, reply) => {
+      const b = req.body ?? {};
+      const provider = b.provider;
+      if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'stub') {
+        return reply.code(400).send({ error: 'provider must be "anthropic", "openai", or "stub".' });
+      }
+      if (provider !== 'stub' && typeof b.model !== 'string') {
+        return reply.code(400).send({ error: 'A "model" string is required for live providers.' });
+      }
+      applyProvider({
+        provider,
+        model: typeof b.model === 'string' && b.model.trim() ? b.model.trim() : providerSettings.model,
+        baseURL: typeof b.baseURL === 'string' && b.baseURL.trim() ? b.baseURL.trim() : undefined,
+        apiKey: typeof b.apiKey === 'string' ? b.apiKey : undefined,
+      });
+      return { provider: providerSettings.provider, model: providerSettings.model, baseURL: providerSettings.baseURL ?? null, hasKey: Boolean(currentApiKey), modelMode: modelMode() };
+    },
+  );
+
+  // Test the current provider with a tiny round-trip (no secrets returned).
+  app.post('/api/settings/provider/test', async (_req, reply) => {
+    try {
+      const res = await gateway.complete({ system: 'Reply briefly.', prompt: 'Reply with: ok', task: 'general' });
+      return { ok: true, model: res.model, sample: res.text.slice(0, 200) };
+    } catch (err) {
+      return reply.code(502).send({ ok: false, error: err instanceof Error ? err.message : 'Provider test failed' });
+    }
+  });
 
   app.post<{ Body: InvestigateBody }>('/api/investigate', async (req, reply) => {
     const { question, caseId } = req.body ?? {};

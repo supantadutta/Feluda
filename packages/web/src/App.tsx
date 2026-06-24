@@ -11,6 +11,7 @@ import { Dashboard } from './components/Dashboard.js';
 import { OsintPanel } from './components/OsintPanel.js';
 import { SocPanel } from './components/SocPanel.js';
 import { CasesPanel } from './components/CasesPanel.js';
+import { SettingsPanel } from './components/SettingsPanel.js';
 import { useVoice } from './voice.js';
 
 interface UserMessage {
@@ -27,8 +28,8 @@ interface ErrorMessage {
 }
 type Message = UserMessage | FeludaMessage | ErrorMessage;
 
-type Tab = 'chat' | 'dashboard' | 'osint' | 'soc' | 'cases';
-const TABS: Tab[] = ['chat', 'dashboard', 'osint', 'soc', 'cases'];
+type Tab = 'chat' | 'dashboard' | 'osint' | 'soc' | 'cases' | 'settings';
+const TABS: Tab[] = ['chat', 'dashboard', 'osint', 'soc', 'cases', 'settings'];
 
 export function App(): JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -98,6 +99,10 @@ export function App(): JSX.Element {
         ) : tab === 'cases' ? (
           <div className="flex-1 pb-8">
             <CasesPanel />
+          </div>
+        ) : tab === 'settings' ? (
+          <div className="flex-1 pb-8">
+            <SettingsPanel />
           </div>
         ) : (
           <>

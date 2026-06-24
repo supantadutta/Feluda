@@ -12,6 +12,7 @@
  */
 import { StubGateway } from './providers/stub.js';
 import { AnthropicGateway } from './providers/anthropic.js';
+import { OpenAICompatibleGateway } from './providers/openai.js';
 
 /** A normalized request to any model provider. */
 export interface ModelRequest {
@@ -46,6 +47,9 @@ export interface ModelGateway {
 
 export { StubGateway } from './providers/stub.js';
 export { AnthropicGateway, type AnthropicGatewayConfig } from './providers/anthropic.js';
+export { OpenAICompatibleGateway, type OpenAICompatibleConfig } from './providers/openai.js';
+
+export type ProviderKind = 'anthropic' | 'openai' | 'stub';
 export {
   Council,
   agreementOf,
@@ -78,22 +82,34 @@ export function createCouncil(config: CreateCouncilConfig): Council {
 }
 
 export interface GatewayConfig {
-  /** Anthropic API key. When absent, the offline stub is used. */
+  /** Provider to use. Defaults inferred from the other fields. */
+  provider?: ProviderKind;
+  /** API key. When absent (and provider isn't openai with a baseURL), the stub is used. */
   apiKey?: string;
-  /** Default model id. */
+  /** Model id. */
   model?: string;
+  /** OpenAI-compatible base URL (OpenAI, OpenRouter, Ollama, LM Studio, …). */
+  baseURL?: string;
 }
 
 /**
- * Build the default gateway: Anthropic when an API key is provided, otherwise
- * an offline stub so the loop runs without secrets or network.
+ * Build a gateway from config. Supports Anthropic, any OpenAI-compatible
+ * endpoint, and an offline stub. Inference: explicit `provider` wins; else a
+ * `baseURL` implies openai-compatible; else a key implies Anthropic; else stub.
  */
 export function createModelGateway(config: GatewayConfig = {}): ModelGateway {
-  if (config.apiKey) {
-    return new AnthropicGateway({
+  const provider: ProviderKind =
+    config.provider ?? (config.baseURL ? 'openai' : config.apiKey ? 'anthropic' : 'stub');
+
+  if (provider === 'openai' && config.apiKey) {
+    return new OpenAICompatibleGateway({
       apiKey: config.apiKey,
-      model: config.model ?? 'claude-opus-4-8',
+      model: config.model ?? 'gpt-4o-mini',
+      baseURL: config.baseURL,
     });
+  }
+  if (provider === 'anthropic' && config.apiKey) {
+    return new AnthropicGateway({ apiKey: config.apiKey, model: config.model ?? 'claude-opus-4-8' });
   }
   return new StubGateway();
 }

@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "description": "Feluda CLI — investigate, OSINT, and SOC triage from the terminal.",
-  "bin": { "feluda": "./dist/index.js" },
+  "bin": {
+    "feluda": "./dist/index.js"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@feluda/core": "*"
   },
   "devDependencies": {
+    "tsup": "^8.5.1",
     "tsx": "^4.15.0",
     "typescript": "^5.5.0"
   }

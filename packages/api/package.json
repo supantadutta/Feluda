@@ -17,7 +17,8 @@
     "@fastify/rate-limit": "^9.1.0",
     "@feluda/core": "*",
     "dotenv": "^16.4.5",
-    "fastify": "^4.28.0"
+    "fastify": "^4.28.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

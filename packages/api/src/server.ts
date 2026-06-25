@@ -19,13 +19,17 @@ import {
 } from '@feluda/core';
 // `Council` namespace exposes both the gateway factory and createCouncil.
 import { loadConfig, type Config } from './config.js';
+import {
+  registerErrorHandler,
+  InvestigateSchema,
+  ProviderSchema,
+  OsintSchema,
+  SocSchema,
+  LearningSchema,
+  NewCaseSchema,
+} from './validate.js';
 
 const PHASE = 7;
-
-interface InvestigateBody {
-  question?: unknown;
-  caseId?: unknown;
-}
 
 /**
  * Builds the Fastify app (Layer I — API surface). Kept separate from `index.ts`
@@ -43,6 +47,8 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
       redact: ['req.headers.authorization', 'req.headers["x-api-key"]', '*.apiKey', '*.anthropicApiKey', '*.ANTHROPIC_API_KEY'],
     },
   });
+
+  registerErrorHandler(app);
 
   // Security headers + CORS + rate limiting.
   await app.register(helmet, { contentSecurityPolicy: false });
@@ -162,26 +168,16 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     modelMode: modelMode(),
   }));
 
-  app.post<{ Body: { provider?: unknown; model?: unknown; baseURL?: unknown; apiKey?: unknown } }>(
-    '/api/settings/provider',
-    async (req, reply) => {
-      const b = req.body ?? {};
-      const provider = b.provider;
-      if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'stub') {
-        return reply.code(400).send({ error: 'provider must be "anthropic", "openai", or "stub".' });
-      }
-      if (provider !== 'stub' && typeof b.model !== 'string') {
-        return reply.code(400).send({ error: 'A "model" string is required for live providers.' });
-      }
-      applyProvider({
-        provider,
-        model: typeof b.model === 'string' && b.model.trim() ? b.model.trim() : providerSettings.model,
-        baseURL: typeof b.baseURL === 'string' && b.baseURL.trim() ? b.baseURL.trim() : undefined,
-        apiKey: typeof b.apiKey === 'string' ? b.apiKey : undefined,
-      });
-      return { provider: providerSettings.provider, model: providerSettings.model, baseURL: providerSettings.baseURL ?? null, hasKey: Boolean(currentApiKey), modelMode: modelMode() };
-    },
-  );
+  app.post('/api/settings/provider', async (req) => {
+    const b = ProviderSchema.parse(req.body ?? {});
+    applyProvider({
+      provider: b.provider,
+      model: b.model ?? providerSettings.model,
+      baseURL: b.baseURL,
+      apiKey: b.apiKey,
+    });
+    return { provider: providerSettings.provider, model: providerSettings.model, baseURL: providerSettings.baseURL ?? null, hasKey: Boolean(currentApiKey), modelMode: modelMode() };
+  });
 
   // Test the current provider with a tiny round-trip (no secrets returned).
   app.post('/api/settings/provider/test', async (_req, reply) => {
@@ -193,22 +189,14 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     }
   });
 
-  app.post<{ Body: InvestigateBody }>('/api/investigate', async (req, reply) => {
-    const { question, caseId } = req.body ?? {};
-    if (typeof question !== 'string' || question.trim().length === 0) {
-      return reply.code(400).send({ error: 'A non-empty "question" string is required.' });
-    }
-    if (question.length > 4000) {
-      return reply.code(400).send({ error: 'Question is too long (max 4000 characters).' });
-    }
-
+  app.post('/api/investigate', async (req) => {
+    const { question, caseId } = InvestigateSchema.parse(req.body ?? {});
     const verdict: Verdict = await orchestrator.investigate({
       id: `q_${Date.now().toString(36)}`,
-      text: question.trim(),
-      caseId: typeof caseId === 'string' ? caseId : undefined,
+      text: question,
+      caseId,
       receivedAt: new Date().toISOString(),
     });
-
     return verdict;
   });
 
@@ -231,18 +219,9 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   });
 
   // ── Investigation Case System (Layer II) ──
-  app.post<{ Body: { title?: unknown; objective?: unknown; scope?: unknown } }>('/api/cases', async (req, reply) => {
-    const { title, objective, scope } = req.body ?? {};
-    if (typeof title !== 'string' || title.trim().length === 0) {
-      return reply.code(400).send({ error: 'A non-empty "title" string is required.' });
-    }
-    return {
-      case: cases.create({
-        title: title.trim(),
-        objective: typeof objective === 'string' ? objective : undefined,
-        scope: typeof scope === 'string' ? scope : undefined,
-      }),
-    };
+  app.post('/api/cases', async (req) => {
+    const { title, objective, scope } = NewCaseSchema.parse(req.body ?? {});
+    return { case: cases.create({ title, objective, scope }) };
   });
 
   app.get('/api/cases', async () => ({ cases: cases.list() }));
@@ -359,43 +338,38 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   });
 
   // ── Synthetic learning (Layer V): train on synthetic cases, measure lift ──
-  app.post<{ Body: { rounds?: unknown; perClassPerRound?: unknown } }>('/api/learning/run', async (req, reply) => {
-    const b = req.body ?? {};
-    const rounds = typeof b.rounds === 'number' && b.rounds > 0 && b.rounds <= 20 ? b.rounds : 5;
-    const perClassPerRound = typeof b.perClassPerRound === 'number' && b.perClassPerRound > 0 && b.perClassPerRound <= 5 ? b.perClassPerRound : 1;
-    const report = new Learning.SyntheticTrainer().run({ rounds, perClassPerRound });
+  app.post('/api/learning/run', async (req) => {
+    const b = LearningSchema.parse(req.body ?? {});
+    const rounds = b.rounds ?? 5;
+    const report = new Learning.SyntheticTrainer().run({ rounds, perClassPerRound: b.perClassPerRound ?? 1 });
     audit.record(Ethics.auditEntry('learning.run', { rounds, finalAccuracy: report.finalAccuracy }));
-    return reply.send({ report });
+    return { report };
   });
 
   // ── Defensive SOC investigation (Layer VI) ──
-  app.post<{ Body: Record<string, unknown> }>('/api/soc/investigate', async (req, reply) => {
-    const body = req.body ?? {};
-    if (typeof body.type !== 'string') return reply.code(400).send({ error: 'A SOC alert "type" is required.' });
+  app.post('/api/soc/investigate', async (req) => {
+    const body = SocSchema.parse(req.body ?? {});
     const assessment = socAnalyzer.analyze({
       type: body.type as Soc.SocAlertType,
-      title: typeof body.title === 'string' ? body.title : undefined,
-      context: typeof body.context === 'string' ? body.context : undefined,
-      artifacts: Array.isArray(body.artifacts) ? body.artifacts.map(String) : undefined,
-      logs: Array.isArray(body.logs) ? body.logs.map(String) : undefined,
+      title: body.title,
+      context: body.context,
+      artifacts: body.artifacts,
+      logs: body.logs,
     });
     audit.record(Ethics.auditEntry('soc.assessed', { type: body.type, verdict: assessment.verdict, escalate: assessment.escalate }));
     return { assessment, report: Cases.socReport(assessment) };
   });
 
   // OSINT (Layer IV): passive, public-source investigation of an indicator.
-  app.post<{ Body: { target?: unknown; type?: unknown } }>('/api/osint/investigate', async (req, reply) => {
-    const { target, type } = req.body ?? {};
-    if (typeof target !== 'string' || target.trim().length === 0) {
-      return reply.code(400).send({ error: 'A non-empty "target" string is required.' });
-    }
+  app.post('/api/osint/investigate', async (req, reply) => {
+    const { target, type } = OsintSchema.parse(req.body ?? {});
     // Screen the request — block doxxing/deanonymisation/intrusive misuse.
     const screen = ethics.screenRequest(target);
     audit.record(Ethics.auditEntry('osint.screened', { allowed: screen.allowed, boundary: screen.boundary }));
     if (!screen.allowed) {
       return reply.code(403).send({ refusal: { boundary: screen.boundary, reason: screen.reason, lawfulAlternative: screen.lawfulAlternative } });
     }
-    const result = await osint.investigate(target.trim(), typeof type === 'string' ? (type as Osint.OsintTargetType) : undefined);
+    const result = await osint.investigate(target, type as Osint.OsintTargetType | undefined);
     return result;
   });
 

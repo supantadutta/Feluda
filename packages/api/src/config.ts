@@ -33,6 +33,9 @@ export interface Config {
   rateLimitMax: number;
   /** File path to persist investigation cases (survives restart). */
   casesPath?: string;
+  /** File paths to persist adaptive learning (feedback + playbooks). */
+  feedbackPath?: string;
+  playbooksPath?: string;
 }
 
 export function loadConfig(): Config {
@@ -56,5 +59,7 @@ export function loadConfig(): Config {
     maxBodyBytes: Number(process.env.FELUDA_MAX_BODY_BYTES ?? 1_000_000),
     rateLimitMax: Number(process.env.FELUDA_RATE_LIMIT_MAX ?? 240),
     casesPath: process.env.FELUDA_CASES_PATH || undefined,
+    feedbackPath: process.env.FELUDA_FEEDBACK_PATH || undefined,
+    playbooksPath: process.env.FELUDA_PLAYBOOKS_PATH || undefined,
   };
 }

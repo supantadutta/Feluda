@@ -64,8 +64,8 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
   const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
   const audit = new Ethics.FileAuditLog();
-  const feedback = new Memory.FeedbackStore();
-  const patterns = new Memory.PatternLibrary();
+  const feedback = new Memory.FeedbackStore(new Memory.LocalEmbedder(), config.feedbackPath);
+  const patterns = new Memory.PatternLibrary(config.playbooksPath);
   const selfReview = new Memory.SelfReview(memory);
 
   // ── Runtime-configurable AI provider (set from the UI) ──
@@ -309,15 +309,35 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
     async (req, reply) => {
       const b = req.body ?? {};
       if (typeof b.answer !== 'string') return reply.code(400).send({ error: 'An "answer" string is required.' });
+      // Coerce untrusted input into the exact shapes the council expects (no `as never`).
+      const hypotheses = (Array.isArray(b.hypotheses) ? b.hypotheses : []).map((h, i) => {
+        const o = (h ?? {}) as Record<string, unknown>;
+        return {
+          id: typeof o.id === 'string' ? o.id : `h${i}`,
+          statement: typeof o.statement === 'string' ? o.statement : '',
+          belief: typeof o.belief === 'number' ? o.belief : 0,
+          supporting: Array.isArray(o.supporting) ? o.supporting.map(String) : [],
+          contradicting: Array.isArray(o.contradicting) ? o.contradicting.map(String) : [],
+        };
+      });
+      const evidence = (Array.isArray(b.evidence) ? b.evidence : []).map((e, i) => {
+        const o = (e ?? {}) as Record<string, unknown>;
+        const src = typeof o.source === 'string' ? o.source : '';
+        return {
+          id: typeof o.id === 'string' ? o.id : `e${i}`,
+          claim: typeof o.claim === 'string' ? o.claim : '',
+          citation: { source: src, retrievedAt: '' },
+          credibility: typeof o.credibility === 'number' ? o.credibility : 0.5,
+          relevance: typeof o.relevance === 'number' ? o.relevance : 0.5,
+        };
+      });
+      const cf = (b.confidence ?? {}) as Record<string, unknown>;
+      const band = cf.band === 'high' || cf.band === 'medium' || cf.band === 'low' ? cf.band : 'low';
       const review = investigativeCouncil.review({
         answer: b.answer,
-        hypotheses: Array.isArray(b.hypotheses) ? (b.hypotheses as never[]) : [],
-        evidence: Array.isArray(b.evidence) ? (b.evidence as never[]) : [],
-        confidence: (b.confidence as { score: number; band: 'low' | 'medium' | 'high'; gaps: string[] }) ?? {
-          score: 0,
-          band: 'low',
-          gaps: [],
-        },
+        hypotheses,
+        evidence,
+        confidence: { score: typeof cf.score === 'number' ? cf.score : 0, band, gaps: Array.isArray(cf.gaps) ? cf.gaps.map(String) : [] },
         citations: [],
       });
       return { review };

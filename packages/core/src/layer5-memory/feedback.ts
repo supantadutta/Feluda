@@ -4,6 +4,8 @@
  * investigations so behaviour measurably changes over time. Relevance uses the
  * same offline embedder as the vault.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { newId } from '../util/ids.js';
 import { cosine, LocalEmbedder, type Embedder } from './embedder.js';
 
@@ -16,12 +18,22 @@ export interface Preference {
 export class FeedbackStore {
   private items: { pref: Preference; vector: number[] }[] = [];
 
-  constructor(private readonly embedder: Embedder = new LocalEmbedder()) {}
+  constructor(
+    private readonly embedder: Embedder = new LocalEmbedder(),
+    /** Optional JSON file to persist preferences across restarts. */
+    private readonly path?: string,
+  ) {
+    if (path && existsSync(path)) {
+      const prefs = JSON.parse(readFileSync(path, 'utf8')) as Preference[];
+      this.items = prefs.map((pref) => ({ pref, vector: this.embedder.embed(pref.text) }));
+    }
+  }
 
   /** Record a correction/preference, e.g. "always cite primary sources first". */
   add(text: string): Preference {
     const pref: Preference = { id: newId('pref'), text, createdAt: new Date().toISOString() };
     this.items.push({ pref, vector: this.embedder.embed(text) });
+    this.persist();
     return pref;
   }
 
@@ -38,5 +50,11 @@ export class FeedbackStore {
 
   get size(): number {
     return this.items.length;
+  }
+
+  private persist(): void {
+    if (!this.path) return;
+    mkdirSync(dirname(this.path), { recursive: true });
+    writeFileSync(this.path, JSON.stringify(this.items.map((i) => i.pref)), 'utf8');
   }
 }

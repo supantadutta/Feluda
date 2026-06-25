@@ -10,7 +10,7 @@
  * Phase: Knowledge Vault + Case Memory in Phase 3; adaptive learning in Phase 6.
  */
 import type { Verdict } from '../types.js';
-import { LocalEmbedder, type Embedder } from './embedder.js';
+import { LocalEmbedder } from './embedder.js';
 import { InMemoryVectorStore, FileVectorStore } from './vector-store.js';
 import { KnowledgeVault } from './knowledge-vault.js';
 
@@ -38,23 +38,36 @@ export interface MemoryPort {
   reviewOnNewEvidence?(verdict: Verdict): Promise<void>;
 }
 
-export { LocalEmbedder, cosine, type Embedder } from './embedder.js';
+export {
+  LocalEmbedder,
+  RemoteEmbedder,
+  cosine,
+  type Embedder,
+  type AsyncEmbedder,
+  type AnyEmbedder,
+  type RemoteEmbedderConfig,
+} from './embedder.js';
 export { InMemoryVectorStore, FileVectorStore } from './vector-store.js';
 export { KnowledgeVault } from './knowledge-vault.js';
 export { FeedbackStore, type Preference } from './feedback.js';
 export { PatternLibrary, type Playbook } from './pattern-library.js';
 export { SelfReview } from './self-review.js';
 
+import { RemoteEmbedder, type AnyEmbedder, type RemoteEmbedderConfig } from './embedder.js';
+
 export interface MemoryConfig {
   /** File path to persist the vector store. When absent, memory is in-process. */
   storePath?: string;
-  /** Swap the embedder (defaults to the offline LocalEmbedder). */
-  embedder?: Embedder;
+  /** Swap the embedder directly (defaults to the offline LocalEmbedder). */
+  embedder?: AnyEmbedder;
+  /** When set, use a remote SEMANTIC embedder (true RAG) instead of the lexical one. */
+  remoteEmbedding?: RemoteEmbedderConfig;
 }
 
 /** Build the default MemoryPort — a Knowledge Vault over a local vector store. */
 export function createMemoryPort(config: MemoryConfig = {}): KnowledgeVault {
-  const embedder = config.embedder ?? new LocalEmbedder();
+  const embedder: AnyEmbedder =
+    config.embedder ?? (config.remoteEmbedding ? new RemoteEmbedder(config.remoteEmbedding) : new LocalEmbedder());
   const store = config.storePath
     ? new FileVectorStore(embedder, config.storePath)
     : new InMemoryVectorStore(embedder);

@@ -62,7 +62,13 @@ export async function buildServer(config: Config = loadConfig()): Promise<Fastif
   }
 
   const evidence = Evidence.createEvidencePort({ searchApiKey: config.searchApiKey });
-  const memory = Memory.createMemoryPort({ storePath: config.vectorStorePath });
+  const memory = Memory.createMemoryPort({
+    storePath: config.vectorStorePath,
+    // Use a remote semantic embedder when configured; lexical otherwise.
+    remoteEmbedding: config.embeddingApiKey
+      ? { apiKey: config.embeddingApiKey, model: config.embeddingModel ?? 'text-embedding-3-small', baseURL: config.embeddingBaseURL }
+      : undefined,
+  });
   const audit = new Ethics.FileAuditLog();
   const feedback = new Memory.FeedbackStore(new Memory.LocalEmbedder(), config.feedbackPath);
   const patterns = new Memory.PatternLibrary(config.playbooksPath);

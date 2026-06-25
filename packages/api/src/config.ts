@@ -36,6 +36,10 @@ export interface Config {
   /** File paths to persist adaptive learning (feedback + playbooks). */
   feedbackPath?: string;
   playbooksPath?: string;
+  /** Remote semantic embeddings for memory (true RAG). Lexical fallback if unset. */
+  embeddingApiKey?: string;
+  embeddingModel?: string;
+  embeddingBaseURL?: string;
 }
 
 export function loadConfig(): Config {
@@ -61,5 +65,8 @@ export function loadConfig(): Config {
     casesPath: process.env.FELUDA_CASES_PATH || undefined,
     feedbackPath: process.env.FELUDA_FEEDBACK_PATH || undefined,
     playbooksPath: process.env.FELUDA_PLAYBOOKS_PATH || undefined,
+    embeddingApiKey: process.env.FELUDA_EMBEDDING_API_KEY || undefined,
+    embeddingModel: process.env.FELUDA_EMBEDDING_MODEL || 'text-embedding-3-small',
+    embeddingBaseURL: process.env.FELUDA_EMBEDDING_BASE_URL || undefined,
   };
 }

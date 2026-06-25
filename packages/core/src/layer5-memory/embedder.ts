@@ -12,6 +12,14 @@ export interface Embedder {
   embed(text: string): number[];
 }
 
+/** Async embedder (e.g. a remote semantic embedding API). */
+export interface AsyncEmbedder {
+  readonly dim: number;
+  embed(text: string): Promise<number[]>;
+}
+
+export type AnyEmbedder = Embedder | AsyncEmbedder;
+
 const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'is', 'are', 'for', 'on']);
 
 function tokenize(text: string): string[] {
@@ -43,9 +51,62 @@ export class LocalEmbedder implements Embedder {
   }
 }
 
-/** Cosine similarity of two equal-length, L2-normalised vectors. */
+/** Cosine similarity of two vectors (handles non-normalised inputs too). */
 export function cosine(a: number[], b: number[]): number {
   let dot = 0;
-  for (let i = 0; i < a.length; i++) dot += a[i]! * b[i]!;
-  return dot;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+interface EmbeddingsResponse {
+  data?: { embedding?: number[] }[];
+}
+
+export interface RemoteEmbedderConfig {
+  apiKey: string;
+  /** Embeddings model id (e.g. text-embedding-3-small, or an Ollama model). */
+  model: string;
+  /** OpenAI-compatible base URL (OpenAI default, or local Ollama/LM Studio). */
+  baseURL?: string;
+  /** Expected vector dimension (informational; cosine doesn't require it). */
+  dim?: number;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Remote semantic embedder over an OpenAI-compatible /embeddings endpoint. Turns
+ * the Knowledge Vault from lexical (LocalEmbedder) into true semantic recall when
+ * a key is configured. Falls back to the offline LocalEmbedder otherwise. The key
+ * is injected and never logged.
+ */
+export class RemoteEmbedder implements AsyncEmbedder {
+  readonly dim: number;
+  private readonly baseURL: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(private readonly config: RemoteEmbedderConfig) {
+    this.dim = config.dim ?? 1536;
+    this.baseURL = (config.baseURL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+    this.fetchImpl = config.fetchImpl ?? fetch;
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const res = await this.fetchImpl(`${this.baseURL}/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` },
+      body: JSON.stringify({ model: this.config.model, input: text }),
+    });
+    if (!res.ok) throw new Error(`Embedding provider error (${res.status})`);
+    const data = (await res.json()) as EmbeddingsResponse;
+    const vec = data.data?.[0]?.embedding;
+    if (!vec) throw new Error('Embedding provider returned no vector');
+    return vec;
+  }
 }

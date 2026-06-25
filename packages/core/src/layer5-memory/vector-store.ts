@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { MemoryItem, VectorStore } from './index.js';
-import { cosine, type Embedder } from './embedder.js';
+import { cosine, type AnyEmbedder } from './embedder.js';
 
 interface StoredItem {
   item: MemoryItem;
@@ -17,17 +17,18 @@ interface StoredItem {
 export class InMemoryVectorStore implements VectorStore {
   protected items = new Map<string, StoredItem>();
 
-  constructor(protected readonly embedder: Embedder) {}
+  // Accepts a sync (LocalEmbedder) or async (RemoteEmbedder) embedder.
+  constructor(protected readonly embedder: AnyEmbedder) {}
 
   async upsert(items: MemoryItem[]): Promise<void> {
     for (const item of items) {
-      this.items.set(item.id, { item, vector: this.embedder.embed(item.text) });
+      this.items.set(item.id, { item, vector: await this.embedder.embed(item.text) });
     }
     await this.persist();
   }
 
   async query(text: string, k: number): Promise<MemoryItem[]> {
-    const q = this.embedder.embed(text);
+    const q = await this.embedder.embed(text);
     return [...this.items.values()]
       .map((s) => ({ item: s.item, score: cosine(q, s.vector) }))
       .filter((r) => r.score > 0)
@@ -46,7 +47,7 @@ export class InMemoryVectorStore implements VectorStore {
 
 export class FileVectorStore extends InMemoryVectorStore {
   constructor(
-    embedder: Embedder,
+    embedder: AnyEmbedder,
     private readonly path: string,
   ) {
     super(embedder);
